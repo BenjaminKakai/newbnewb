@@ -1,0 +1,105 @@
+name: CI - Production
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+env:
+  ENV: production
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+  REPO_NAME: wasaa-web-service
+  NODE_ENV: production
+jobs:
+  build-test-analyze:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      - name: Install dependencies (with fallback)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --legacy-peer-deps
+          fi
+      - name: Run tests
+        run: |
+          if npm run --silent | grep -q "test"; then
+            npm run test
+          else
+            echo "No test script found. Skipping tests..."
+          fi
+      - name: Lint (if defined)
+        run: |
+          if npm run --silent | grep -q "lint"; then
+            npm run lint
+          else
+            echo "No lint script found. Skipping lint..."
+          fi
+      - name: Build Next.js app
+        run: npm run build
+      - name: Upload .next build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
+  build-and-push:
+    needs: build-test-analyze
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: nextjs-build
+          path: .next/
+      - name: Extract version details
+        run: |
+          echo "BRANCH_NAME=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "VERSION_TAG=${GITHUB_REF##*/}-$(date +%Y%m%d%H%M)-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Ensure ECR repository exists
+        run: |
+          if ! aws ecr describe-repositories --repository-names "$REPO_NAME" --region ${{ secrets.AWS_REGION }} 2>/dev/null; then
+            aws ecr create-repository \
+              --repository-name "$REPO_NAME" \
+              --image-scanning-configuration scanOnPush=true \
+              --region ${{ secrets.AWS_REGION }}
+          fi
+      - name: Build Docker image
+        run: |
+          docker build -t $ECR_REGISTRY/$REPO_NAME:${VERSION_TAG} .
+          docker tag $ECR_REGISTRY/$REPO_NAME:${VERSION_TAG} $ECR_REGISTRY/$REPO_NAME:latest-${BRANCH_NAME}
+      - name: Push Docker image to ECR
+        run: |
+          docker push $ECR_REGISTRY/$REPO_NAME:${VERSION_TAG}
+          docker push $ECR_REGISTRY/$REPO_NAME:latest-${BRANCH_NAME}

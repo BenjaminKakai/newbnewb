@@ -1,0 +1,24 @@
+networks:
+  wasaa-network:
+    external: true
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wasaa-web
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173" 
+    networks:
+      - wasaa-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "2G"
+
+    command: sh -c "npm run build && npm start"
