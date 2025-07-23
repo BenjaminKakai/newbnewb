@@ -15,8 +15,8 @@ import { toast } from "react-hot-toast";
 // Constants
 const API_HOST = "http://xmpp-dev.wasaachat.com:8080/api/v1";
 const BOSH_SERVICE = "http://xmpp-dev.wasaachat.com:5280/bosh";
-const CONFERENCE_DOMAIN = "conference.xmpp-dev.wasaachat.com";
 const DOMAIN = "xmpp-dev.wasaachat.com";
+const CONFERENCE_DOMAIN = "conference.xmpp-dev.wasaachat.com";
 
 // Utility Functions
 const isValidBareJid = (jid: string): boolean => {
@@ -29,7 +29,7 @@ const getDisplayName = (
   groupConversations: GroupConversation[]
 ) => {
   const group = groupConversations.find((g) => g.jid === jid);
-  return group?.name || jid.split("@")[0];
+  return group?.name || jid.split("@")[0] || "Unnamed Group";
 };
 
 const getAvatarColor = () => "bg-gray-500";
@@ -39,7 +39,7 @@ const getDummyAvatar = (id: string) => {
 };
 
 // Types
-interface Message {
+export interface Message {
   id: string;
   from: string;
   to: string;
@@ -49,15 +49,15 @@ interface Message {
   nickname: string;
 }
 
-interface User {
+export interface User {
   id: string;
   jid: string;
 }
 
-interface GroupConversation {
+export interface GroupConversation {
   jid: string;
   name: string;
-  description?: string; // Added description field
+  description?: string;
   lastMessage: string;
   lastMessageTime: Date;
   unreadCount: number;
@@ -65,9 +65,10 @@ interface GroupConversation {
   members: GroupMember[];
   type: "GROUP";
   avatar?: string;
+  groupId: string;
 }
 
-interface GroupMember {
+export interface GroupMember {
   id: string;
   nickname: string;
   isOnline: boolean;
@@ -78,7 +79,7 @@ interface GroupMember {
 interface NewGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateGroup: (groupName: string, description: string) => Promise<void>; // Updated to include description
+  onCreateGroup: (groupName: string, description: string) => Promise<void>;
   userId: string;
   accessToken: string;
 }
@@ -91,7 +92,7 @@ const NewGroupModal: React.FC<NewGroupModalProps> = ({
   accessToken,
 }) => {
   const [groupName, setGroupName] = useState("");
-  const [description, setDescription] = useState(""); // Added description state
+  const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [theme, setTheme] = useState("light");
 
@@ -112,10 +113,10 @@ const NewGroupModal: React.FC<NewGroupModalProps> = ({
     }
     setCreating(true);
     try {
-      await onCreateGroup(groupName, description); // Pass description
+      await onCreateGroup(groupName, description);
       toast.success("Group created successfully");
       setGroupName("");
-      setDescription(""); // Reset description
+      setDescription("");
       onClose();
     } catch (error) {
       console.error("Failed to create group:", error);
@@ -189,7 +190,9 @@ const GroupPage: React.FC = () => {
   const [messageText, setMessageText] = useState("");
   const [activeGroupJid, setActiveGroupJid] = useState("");
   const [connectionStatus, setConnectionStatus] = useState("Connecting...");
-  const [groupConversations, setGroupConversations] = useState<GroupConversation[]>([]);
+  const [groupConversations, setGroupConversations] = useState<
+    GroupConversation[]
+  >([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [readGroups, setReadGroups] = useState<Set<string>>(new Set());
@@ -231,7 +234,9 @@ const GroupPage: React.FC = () => {
   // Dark Mode
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
     const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
     setTheme(initialTheme);
   }, []);
@@ -251,7 +256,9 @@ const GroupPage: React.FC = () => {
   // Load read groups
   useEffect(() => {
     if (currentUser?.id) {
-      const savedReadGroups = localStorage.getItem(`readGroups_${currentUser.id}`);
+      const savedReadGroups = localStorage.getItem(
+        `readGroups_${currentUser.id}`
+      );
       if (savedReadGroups) {
         setReadGroups(new Set(JSON.parse(savedReadGroups)));
       }
@@ -260,7 +267,10 @@ const GroupPage: React.FC = () => {
 
   const saveReadGroups = (readSet: Set<string>) => {
     if (currentUser?.id) {
-      localStorage.setItem(`readGroups_${currentUser.id}`, JSON.stringify([...readSet]));
+      localStorage.setItem(
+        `readGroups_${currentUser.id}`,
+        JSON.stringify([...readSet])
+      );
     }
   };
 
@@ -270,28 +280,50 @@ const GroupPage: React.FC = () => {
     setReadGroups(newReadSet);
     saveReadGroups(newReadSet);
     setGroupConversations((prev) =>
-      prev.map((group) => (group.jid === jid ? { ...group, unreadCount: 0 } : group))
+      prev.map((group) =>
+        group.jid === jid ? { ...group, unreadCount: 0 } : group
+      )
     );
   };
 
-  // Initialize XMPP connection
   useEffect(() => {
-    connectionRef.current = new Strophe.Connection(BOSH_SERVICE);
-    connectionRef.current.xmlInput = (body: any) => console.log("RECV:", body);
-    connectionRef.current.xmlOutput = (body: any) => console.log("SEND:", body);
-
+    xmppClient.updateCallbacks({
+      onConnectionStatusChange: (status, connected) => {
+        setConnectionStatus(status);
+        setConnected(connected);
+        if (!connected) {
+          setConnectionError(`Connection status: ${status}`);
+        } else {
+          setConnectionError(null);
+          fetchExistingGroups();
+        }
+      },
+      onMessage: (message) => {
+        if (message.type === "groupchat") {
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === message.id)) return prev;
+            return [...prev, message].sort(
+              (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+            );
+          });
+          updateGroupConversationsList(
+            message.to,
+            message.text,
+            message.timestamp,
+            message.to !== activeGroupJid
+          );
+        }
+      },
+      onPresence: (jid, presence) => {
+        if (jid.includes(`@${CONFERENCE_DOMAIN}`)) {
+          onPresence({ getAttribute: () => jid, getAttribute: (attr) => presence === "unavailable" ? "unavailable" : null });
+        }
+      },
+    });
     return () => {
-      if (connectionRef.current && connected) {
-        if (mamHandlerRef.current) {
-          connectionRef.current.deleteHandler(mamHandlerRef.current);
-        }
-        if (presenceHandlerRef.current) {
-          connectionRef.current.deleteHandler(presenceHandlerRef.current);
-        }
-        connectionRef.current.disconnect();
-      }
+      xmppClient.disconnect();
     };
-  }, [connected]);
+  }, []);
 
   // Connect to XMPP
   useEffect(() => {
@@ -323,7 +355,9 @@ const GroupPage: React.FC = () => {
           connectionAttemptRef.current = false;
         }, 3000);
       } else {
-        setConnectionError("Failed to connect after multiple attempts. Please try again later.");
+        setConnectionError(
+          "Failed to connect after multiple attempts. Please try again later."
+        );
         connectionAttemptRef.current = false;
       }
     } else if (status === Strophe.Status.DISCONNECTING) {
@@ -343,7 +377,14 @@ const GroupPage: React.FC = () => {
       setLoading(false);
       setConnectionAttempts(0);
       connectionRef.current.send($pres().tree());
-      connectionRef.current.addHandler(onMessage, null, "message", "groupchat", null, null);
+      connectionRef.current.addHandler(
+        onMessage,
+        null,
+        "message",
+        "groupchat",
+        null,
+        null
+      );
       presenceHandlerRef.current = connectionRef.current.addHandler(
         onPresence,
         null,
@@ -388,7 +429,12 @@ const GroupPage: React.FC = () => {
           (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
         );
       });
-      updateGroupConversationsList(groupJid, text, new Date(), !isOwn && groupJid !== activeGroupJid);
+      updateGroupConversationsList(
+        groupJid,
+        text,
+        new Date(),
+        !isOwn && groupJid !== activeGroupJid
+      );
       console.log(`Group message from ${from}: ${text}`);
     }
 
@@ -409,7 +455,10 @@ const GroupPage: React.FC = () => {
       return true;
     }
 
-    const xElement = presence.getElementsByTagNameNS("http://jabber.org/protocol/muc#user", "x")[0];
+    const xElement = presence.getElementsByTagNameNS(
+      "http://jabber.org/protocol/muc#user",
+      "x"
+    )[0];
     let role, affiliation, realJid;
 
     if (xElement) {
@@ -427,7 +476,9 @@ const GroupPage: React.FC = () => {
     setGroupConversations((prev) =>
       prev.map((group) => {
         if (group.jid === groupJid) {
-          const existingMemberIndex = group.members.findIndex((m) => m.id === memberId);
+          const existingMemberIndex = group.members.findIndex(
+            (m) => m.id === memberId
+          );
           let updatedMembers = [...group.members];
 
           if (existingMemberIndex !== -1) {
@@ -458,7 +509,11 @@ const GroupPage: React.FC = () => {
       })
     );
 
-    console.log(`Presence update in ${groupJid}: ${nickname} is ${isOnline ? "online" : "offline"}`);
+    console.log(
+      `Presence update in ${groupJid}: ${nickname} is ${
+        isOnline ? "online" : "offline"
+      }`
+    );
     return true;
   };
 
@@ -468,6 +523,12 @@ const GroupPage: React.FC = () => {
     timestamp: Date,
     incrementUnread: boolean = false
   ) => {
+    if (!isValidBareJid(jid)) {
+      console.error(
+        `Skipping updateGroupConversationsList due to invalid JID: ${jid}`
+      );
+      return;
+    }
     setGroupConversations((prev) => {
       const existingIndex = prev.findIndex((group) => group.jid === jid);
       const isRead = readGroups.has(jid) && jid === activeGroupJid;
@@ -477,24 +538,39 @@ const GroupPage: React.FC = () => {
         const currentUnread = updated[existingIndex].unreadCount;
         updated[existingIndex] = {
           ...updated[existingIndex],
-          lastMessage,
-          lastMessageTime: timestamp,
-          unreadCount: isRead ? 0 : incrementUnread ? currentUnread + 1 : currentUnread,
+          lastMessage: lastMessage || "No messages",
+          lastMessageTime:
+            timestamp instanceof Date && !isNaN(timestamp.getTime())
+              ? timestamp
+              : new Date(),
+          unreadCount: isRead
+            ? 0
+            : incrementUnread
+            ? currentUnread + 1
+            : currentUnread,
         };
-        return updated.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+        return updated.sort(
+          (a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
+        );
       } else {
         const newGroup: GroupConversation = {
           jid,
           name: getDisplayName(jid, prev),
-          lastMessage,
-          lastMessageTime: timestamp,
+          lastMessage: lastMessage || "No messages",
+          lastMessageTime:
+            timestamp instanceof Date && !isNaN(timestamp.getTime())
+              ? timestamp
+              : new Date(),
           unreadCount: isRead ? 0 : incrementUnread ? 1 : 0,
           memberCount: 0,
           members: [],
           type: "GROUP",
           avatar: getDummyAvatar(jid),
+          groupId: jid.split("@")[0],
         };
-        return [newGroup, ...prev].sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+        return [newGroup, ...prev].sort(
+          (a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
+        );
       }
     });
   };
@@ -530,38 +606,59 @@ const GroupPage: React.FC = () => {
 
     setLoadingGroups(true);
     try {
-      const response = await axios.get(`${API_HOST}/groups/user/${currentUser.id}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const response = await axios.get(
+        `${API_HOST}/groups/user/${currentUser.id}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
 
       console.log("Fetched groups from API:", response.data);
 
-      if (response.data && response.data.results) {
+      if (response.data && Array.isArray(response.data.results)) {
         const groups = response.data.results;
         const newGroups: GroupConversation[] = await Promise.all(
-          groups.map(async (group: any) => {
-            const groupJid = `${group.host}@${CONFERENCE_DOMAIN}`;
-            if (!isValidBareJid(groupJid)) {
-              console.error(`Invalid group JID: ${groupJid}`);
-              return null;
-            }
-            const members = await fetchGroupMembers(group.host);
-            return {
-              jid: groupJid,
-              name: group.friendly_name || "Unnamed Group",
-              description: group.description || "", // Include description
-              lastMessage: "Group created",
-              lastMessageTime: new Date(group.created_at || new Date()),
-              unreadCount: readGroups.has(groupJid) ? 0 : 0,
-              memberCount: group.member_count || members.length,
-              members,
-              type: "GROUP",
-              avatar: getDummyAvatar(groupJid),
-            };
-          })
+          groups
+            .filter(
+              (group: any) =>
+                group && group.name && typeof group.name === "string"
+            )
+            .map(async (group: any) => {
+              const groupJid = `${group.name}@${CONFERENCE_DOMAIN}`;
+              if (!isValidBareJid(groupJid)) {
+                console.error(`Invalid group JID: ${groupJid}`);
+                return null;
+              }
+              const createdAt = group.created_at
+                ? new Date(group.created_at)
+                : new Date();
+              if (isNaN(createdAt.getTime())) {
+                console.warn(
+                  `Invalid created_at for group ${group.name}: ${group.created_at}`
+                );
+                return null;
+              }
+              const members = await fetchGroupMembers(group.name);
+              return {
+                jid: groupJid,
+                name: (
+                  group.friendly_name ||
+                  group.title ||
+                  "Unnamed Group"
+                ).replace("Unamed Group", "Unnamed Group"),
+                description: group.description || "",
+                lastMessage: group.last_chat_message?.txt || "Group created",
+                lastMessageTime: createdAt,
+                unreadCount: readGroups.has(groupJid) ? 0 : 0,
+                memberCount: group.member_count ?? members.length,
+                members,
+                type: "GROUP",
+                avatar: getDummyAvatar(groupJid),
+                groupId: group.name,
+              };
+            })
         );
 
-        // Filter out null entries (invalid JIDs)
         const validGroups = newGroups.filter(
           (group): group is GroupConversation => group !== null
         );
@@ -574,13 +671,16 @@ const GroupPage: React.FC = () => {
               existingMap.set(newGroup.jid, {
                 ...existing,
                 name: newGroup.name,
-                description: newGroup.description, // Update description
+                description: newGroup.description,
                 lastMessage: newGroup.lastMessage,
                 lastMessageTime: newGroup.lastMessageTime,
-                unreadCount: readGroups.has(newGroup.jid) ? existing.unreadCount : newGroup.unreadCount,
+                unreadCount: readGroups.has(newGroup.jid)
+                  ? existing.unreadCount
+                  : newGroup.unreadCount,
                 memberCount: newGroup.memberCount,
                 members: newGroup.members,
                 avatar: newGroup.avatar,
+                groupId: newGroup.groupId,
               });
             } else {
               existingMap.set(newGroup.jid, newGroup);
@@ -591,7 +691,8 @@ const GroupPage: React.FC = () => {
             (a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
           );
 
-          // Join all groups
+          console.log("Updated groupConversations:", updatedGroups);
+
           updatedGroups.forEach((group) => {
             joinGroup(group.jid);
           });
@@ -601,7 +702,10 @@ const GroupPage: React.FC = () => {
 
         await fetchRecentMessagesMAM();
       } else {
-        console.warn("No groups data found in API response");
+        console.warn(
+          "No groups data found in API response or invalid structure:",
+          response.data
+        );
       }
     } catch (error) {
       console.error("Failed to fetch groups from API:", error);
@@ -613,11 +717,14 @@ const GroupPage: React.FC = () => {
 
   const fetchGroupMembers = async (groupId: string): Promise<GroupMember[]> => {
     try {
-      const response = await axios.get(`${API_HOST}/groups/${groupId}/members`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const response = await axios.get(
+        `${API_HOST}/groups/${groupId}/members`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
 
-      if (response.data && response.data.results) {
+      if (response.data && Array.isArray(response.data.results)) {
         return response.data.results.map((member: any) => ({
           id: member.id || member.jid?.split("@")[0] || "unknown",
           nickname: member.nickname || member.name || member.id || "Unknown",
@@ -626,6 +733,7 @@ const GroupPage: React.FC = () => {
           affiliation: member.affiliation || "none",
         }));
       }
+      console.warn(`No members found for group ${groupId}`);
       return [];
     } catch (error) {
       console.error(`Failed to fetch members for group ${groupId}:`, error);
@@ -636,7 +744,9 @@ const GroupPage: React.FC = () => {
   const fetchRecentMessagesMAM = async (mamNS = "urn:xmpp:mam:2") => {
     if (!connected || !connectionRef.current) return;
 
-    console.log(`Fetching recent group messages via MAM with namespace: ${mamNS}`);
+    console.log(
+      `Fetching recent group messages via MAM with namespace: ${mamNS}`
+    );
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 7);
 
@@ -677,12 +787,13 @@ const GroupPage: React.FC = () => {
           console.log("Retrying MAM query with urn:xmpp:mam:1");
           fetchRecentMessagesMAM("urn:xmpp:mam:1");
         } else {
-          setConnectionError(`Failed to fetch recent group messages: ${condition}`);
+          setConnectionError(
+            `Failed to fetch recent group messages: ${condition}`
+          );
         }
       }
     );
 
-    // Set up MAM handler
     if (mamHandlerRef.current) {
       connectionRef.current.deleteHandler(mamHandlerRef.current);
     }
@@ -711,13 +822,22 @@ const GroupPage: React.FC = () => {
                 return true;
               }
 
+              console.log("Processing MAM message for group:", {
+                groupJid,
+                text,
+                timestamp,
+              });
+
               updateGroupConversationsList(groupJid, text, timestamp);
               const historicalMessage: Message = {
                 id: message.getAttribute("id") || uuidv4(),
                 from,
                 to: groupJid,
                 text,
-                timestamp,
+                timestamp:
+                  timestamp instanceof Date && !isNaN(timestamp.getTime())
+                    ? timestamp
+                    : new Date(),
                 isOwn: nickname === currentUser?.id,
                 nickname,
               };
@@ -728,7 +848,10 @@ const GroupPage: React.FC = () => {
                     (m) =>
                       m.id === historicalMessage.id ||
                       (m.text === text &&
-                        Math.abs(m.timestamp.getTime() - timestamp.getTime()) < 1000)
+                        Math.abs(
+                          m.timestamp.getTime() -
+                            historicalMessage.timestamp.getTime()
+                        ) < 1000)
                   )
                 ) {
                   return prev;
@@ -786,7 +909,9 @@ const GroupPage: React.FC = () => {
 
   const fetchMessageHistory = async (groupJid: string) => {
     if (!connected || !currentUser || !accessToken) {
-      console.warn("Cannot fetch message history: not connected, no user, or no access token");
+      console.warn(
+        "Cannot fetch message history: not connected, no user, or no access token"
+      );
       setLoadingHistory(false);
       return;
     }
@@ -800,10 +925,16 @@ const GroupPage: React.FC = () => {
 
     setLoadingHistory(true);
     try {
-      const groupId = groupJid.split("@")[0];
-      const apiHost = "http://xmpp-dev.wasaachat.com:8080/api/v1";
+      const group = groupConversations.find((g) => g.jid === groupJid);
+      if (!group || !group.groupId) {
+        console.error(
+          `Group not found or missing groupId for JID: ${groupJid}`
+        );
+        throw new Error("Group not found or invalid group ID");
+      }
+      const groupId = group.groupId;
       const response = await axios.get(
-        `${apiHost}/groups/user/${currentUser.id}/${groupId}`,
+        `${API_HOST}/groups/user/${currentUser.id}/${groupId}`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
         }
@@ -811,44 +942,119 @@ const GroupPage: React.FC = () => {
 
       console.log("Fetched group messages from API:", response.data);
 
-      if (response.data && response.data.results) {
-        const apiMessages = response.data.results;
+      if (
+        response.data &&
+        response.data.results &&
+        Array.isArray(response.data.results.results)
+      ) {
+        const apiMessages = response.data.results.results;
         const newMessages: Message[] = apiMessages
           .map((msg: any) => {
-            if (!msg.id || !msg.from || !msg.body || !msg.created_at) {
+            if (!msg.id || !msg.username || !msg.txt || !msg.created_at) {
               console.warn("Skipping invalid message:", msg);
               return null;
             }
-            const fromNickname = msg.from.split("/")[1] || "Unknown";
+            const fromNickname =
+              msg.user?.username || msg.username.split("/")[1] || "Unknown";
+            const timestamp = new Date(msg.created_at);
+            if (isNaN(timestamp.getTime())) {
+              console.warn("Invalid message timestamp:", msg.created_at);
+              return null;
+            }
             return {
               id: msg.id,
-              from: msg.from,
+              from: msg.username,
               to: groupJid,
-              text: msg.body,
-              timestamp: new Date(msg.created_at),
+              text: msg.txt,
+              timestamp,
               isOwn: fromNickname === currentUser.id,
               nickname: fromNickname,
             };
           })
           .filter((msg: Message | null) => msg !== null);
 
+        console.log("Processed messages:", newMessages);
+
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
-          const filteredMessages = newMessages.filter((msg) => !existingIds.has(msg.id));
-          return [...prev, ...filteredMessages].sort(
+          const filteredMessages = newMessages.filter(
+            (msg) => !existingIds.has(msg.id)
+          );
+          const updatedMessages = [...prev, ...filteredMessages].sort(
             (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
           );
+          console.log("Updated messages state:", updatedMessages);
+          return updatedMessages;
         });
 
         if (newMessages.length > 0) {
           const latestMessage = newMessages[newMessages.length - 1];
-          updateGroupConversationsList(groupJid, latestMessage.text, latestMessage.timestamp, false);
+          updateGroupConversationsList(
+            groupJid,
+            latestMessage.text,
+            latestMessage.timestamp,
+            false
+          );
+        } else {
+          if (response.data.friendly_name && group.name === "Unnamed Group") {
+            setGroupConversations((prev) =>
+              prev.map((g) =>
+                g.jid === groupJid
+                  ? {
+                      ...g,
+                      name: response.data.friendly_name.replace(
+                        "Unamed Group",
+                        "Unnamed Group"
+                      ),
+                      description:
+                        response.data.description || g.description || "",
+                      memberCount: response.data.member_count ?? g.memberCount,
+                      lastMessage:
+                        response.data.last_chat_message?.txt ||
+                        g.lastMessage ||
+                        "Group created",
+                      lastMessageTime: response.data.created_at
+                        ? new Date(response.data.created_at)
+                        : g.lastMessageTime,
+                    }
+                  : g
+              )
+            );
+          }
         }
-      } else {
-        console.warn("No messages found in API response");
-      }
 
-      await fetchMessageHistoryMAM(groupJid);
+        await fetchMessageHistoryMAM(groupJid);
+      } else {
+        console.warn(
+          "No messages found in API response or invalid response structure:",
+          response.data
+        );
+        if (response.data.friendly_name && group.name === "Unnamed Group") {
+          setGroupConversations((prev) =>
+            prev.map((g) =>
+              g.jid === groupJid
+                ? {
+                    ...g,
+                    name: response.data.friendly_name.replace(
+                      "Unamed Group",
+                      "Unnamed Group"
+                    ),
+                    description:
+                      response.data.description || g.description || "",
+                    memberCount: response.data.member_count ?? g.memberCount,
+                    lastMessage:
+                      response.data.last_chat_message?.txt ||
+                      g.lastMessage ||
+                      "Group created",
+                    lastMessageTime: response.data.created_at
+                      ? new Date(response.data.created_at)
+                      : g.lastMessageTime,
+                  }
+                : g
+            )
+          );
+        }
+      }
     } catch (error) {
       console.error("Failed to fetch group messages from API:", error);
       setConnectionError("Failed to load group messages. Please try again.");
@@ -858,10 +1064,15 @@ const GroupPage: React.FC = () => {
     }
   };
 
-  const fetchMessageHistoryMAM = (groupJid: string, mamNS = "urn:xmpp:mam:2") => {
+  const fetchMessageHistoryMAM = (
+    groupJid: string,
+    mamNS = "urn:xmpp:mam:2"
+  ) => {
     if (!connected || !connectionRef.current) return;
 
-    console.log(`Fetching MAM history for group JID: ${groupJid} with namespace: ${mamNS}`);
+    console.log(
+      `Fetching MAM history for group JID: ${groupJid} with namespace: ${mamNS}`
+    );
     const iq = $iq({ type: "set", id: uuidv4() })
       .c("query", { xmlns: mamNS })
       .c("x", { xmlns: "jabber:x:data", type: "submit" })
@@ -899,7 +1110,9 @@ const GroupPage: React.FC = () => {
           console.log("Retrying MAM query with urn:xmpp:mam:1");
           fetchMessageHistoryMAM(groupJid, "urn:xmpp:mam:1");
         } else {
-          setConnectionError(`Failed to fetch group message history: ${condition}`);
+          setConnectionError(
+            `Failed to fetch group message history: ${condition}`
+          );
         }
       }
     );
@@ -951,21 +1164,105 @@ const GroupPage: React.FC = () => {
     );
   };
 
-  const joinGroup = (groupJid: string) => {
-    if (!connected || !connectionRef.current || !currentUser) return;
-
+  const joinGroup = async (groupJid: string) => {
+    if (!currentUser) {
+      console.warn("Cannot join group: no user");
+      setConnectionError("No authenticated user found");
+      return;
+    }
+  
     if (!isValidBareJid(groupJid)) {
       console.error(`Invalid group JID: ${groupJid}`);
       setConnectionError(`Invalid group JID: ${groupJid}`);
       return;
     }
-
+  
+    const ensureConnected = async () => {
+      if (
+        connectionRef.current &&
+        connectionRef.current.connected === true &&
+        connectionRef.current.authenticated === true
+      ) {
+        return true;
+      }
+  
+      if (connectionAttempts >= maxConnectionAttempts) {
+        console.error("Max connection attempts reached");
+        setConnectionError("Failed to connect after multiple attempts. Please try again later.");
+        return false;
+      }
+  
+      console.log("Connection not ready, attempting to connect...");
+      setConnectionStatus("Connecting...");
+      setConnectionError(null);
+      connectionAttemptRef.current = true;
+  
+      try {
+        await connectToXMPP();
+        // Wait for connection to be established
+        return new Promise((resolve, reject) => {
+          const checkInterval = setInterval(() => {
+            if (
+              connectionRef.current &&
+              connectionRef.current.connected === true &&
+              connectionRef.current.authenticated === true
+            ) {
+              clearInterval(checkInterval);
+              setConnectionStatus("Connected");
+              setConnected(true);
+              setConnectionAttempts(0);
+              connectionAttemptRef.current = false;
+              resolve(true);
+            }
+          }, 500);
+  
+          setTimeout(() => {
+            clearInterval(checkInterval);
+            if (
+              !connectionRef.current ||
+              connectionRef.current.connected !== true ||
+              connectionRef.current.authenticated !== true
+            ) {
+              console.error("Connection timeout");
+              setConnectionError("Connection timeout. Retrying...");
+              setConnectionAttempts((prev) => prev + 1);
+              connectionAttemptRef.current = false;
+              reject(false);
+            }
+          }, 10000); // 10-second timeout
+        });
+      } catch (error) {
+        console.error("Connection attempt failed:", error);
+        setConnectionError("Failed to connect to chat server. Retrying...");
+        setConnectionAttempts((prev) => prev + 1);
+        connectionAttemptRef.current = false;
+        return false;
+      }
+    };
+  
+    const isConnected = await ensureConnected();
+    if (!isConnected || !connectionRef.current) {
+      console.warn("Cannot join group: connection not established");
+      setConnectionError("Failed to establish connection to join group");
+      return;
+    }
+  
+    const groupId = groupJid.split("@")[0];
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:T.]/g, "")
+      .slice(0, 14); // e.g., 20250723180943
+    const fromJid = `${currentUser.id}@${DOMAIN}/${timestamp}`;
+    const toJid = `${groupId}@${CONFERENCE_DOMAIN}/${currentUser.id}`;
+  
     const presence = $pres({
-      to: `${groupJid}/${currentUser.id}`,
+      from: fromJid,
+      to: toJid,
+      xmlns: "jabber:client",
     }).c("x", { xmlns: "http://jabber.org/protocol/muc" });
-
+  
     connectionRef.current.send(presence.tree());
-    console.log(`Joined group: ${groupJid}`);
+    console.log(`Sent presence to join group: ${groupJid}, from: ${fromJid}, to: ${toJid}`);
   };
 
   const startGroupConversation = (groupJid: string) => {
@@ -1025,12 +1322,21 @@ const GroupPage: React.FC = () => {
   };
 
   const addGroupMember = async (groupJid: string, memberId: string) => {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(memberId)) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        memberId
+      )
+    ) {
       toast.error("Invalid user ID. Must be a valid UUID.");
       return;
     }
 
-    const groupId = groupJid.split("@")[0];
+    const group = groupConversations.find((g) => g.jid === groupJid);
+    if (!group || !group.groupId) {
+      toast.error("Invalid group ID.");
+      return;
+    }
+    const groupId = group.groupId;
     try {
       await axios.post(
         `${API_HOST}/groups/${groupId}/add-member`,
@@ -1058,13 +1364,21 @@ const GroupPage: React.FC = () => {
   };
 
   const removeGroupMember = async (groupJid: string, memberId: string) => {
-    const groupId = groupJid.split("@")[0];
+    const group = groupConversations.find((g) => g.jid === groupJid);
+    if (!group || !group.groupId) {
+      toast.error("Invalid group ID.");
+      return;
+    }
+    const groupId = group.groupId;
     try {
-      await axios.delete(`${API_HOST}/groups/${groupId}/remove-member/${memberId}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      await axios.delete(
+        `${API_HOST}/groups/${groupId}/remove-member/${memberId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
       toast.success("Member removed successfully");
       const members = await fetchGroupMembers(groupId);
       setGroupConversations((prev) =>
@@ -1095,7 +1409,9 @@ const GroupPage: React.FC = () => {
     });
     connectionRef.current.send(presence.tree());
 
-    setGroupConversations((prev) => prev.filter((group) => group.jid !== groupJid));
+    setGroupConversations((prev) =>
+      prev.filter((group) => group.jid !== groupJid)
+    );
     if (activeGroupJid === groupJid) {
       setActiveGroupJid("");
     }
@@ -1110,7 +1426,7 @@ const GroupPage: React.FC = () => {
         `${API_HOST}/groups`,
         {
           title: groupName,
-          description: description, // Include description in API payload
+          description: description,
           ID: currentUser.id,
         },
         {
@@ -1121,28 +1437,37 @@ const GroupPage: React.FC = () => {
         }
       );
 
-      if (response.data && response.data.host) {
-        const groupJid = `${response.data.host}@${CONFERENCE_DOMAIN}`;
+      if (response.data && response.data.name) {
+        const groupJid = `${response.data.name}@${CONFERENCE_DOMAIN}`;
         if (!isValidBareJid(groupJid)) {
           console.error(`Invalid group JID created: ${groupJid}`);
           throw new Error(`Invalid group JID: ${groupJid}`);
         }
-        const members = await fetchGroupMembers(response.data.host);
+        const createdAt = response.data.created_at
+          ? new Date(response.data.created_at)
+          : new Date();
+        const members = await fetchGroupMembers(response.data.name);
         setGroupConversations((prev) => {
           if (prev.some((group) => group.jid === groupJid)) {
             return prev;
           }
           const newGroup: GroupConversation = {
             jid: groupJid,
-            name: response.data.friendly_name || groupName,
-            description: response.data.description || description, // Include description
+            name: (response.data.friendly_name || groupName).replace(
+              "Unamed Group",
+              "Unnamed Group"
+            ),
+            description: response.data.description || description,
             lastMessage: "Group created",
-            lastMessageTime: new Date(response.data.created_at || new Date()),
+            lastMessageTime: isNaN(createdAt.getTime())
+              ? new Date()
+              : createdAt,
             unreadCount: 0,
-            memberCount: members.length,
+            memberCount: response.data.member_count ?? members.length,
             members,
             type: "GROUP",
             avatar: getDummyAvatar(groupJid),
+            groupId: response.data.name,
           };
           return [newGroup, ...prev].sort(
             (a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
@@ -1181,8 +1506,10 @@ const GroupPage: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-[var(--background)]">
         <div className="flex flex-col items-center space-y-4">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          <span className="text-gray-600 dark:text-white text-sm">Checking authentication...</span>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <span className="text-gray-600 dark:text-white text-sm">
+            Checking authentication...
+          </span>
         </div>
       </div>
     );
@@ -1207,8 +1534,12 @@ const GroupPage: React.FC = () => {
               />
             </svg>
           </div>
-          <h2 className="text-xl font-semibold mb-2 text-red-600">Connection Failed</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">{connectionError}</p>
+          <h2 className="text-xl font-semibold mb-2 text-red-600">
+            Connection Failed
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {connectionError}
+          </p>
           <button
             onClick={retryConnection}
             className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
@@ -1220,7 +1551,9 @@ const GroupPage: React.FC = () => {
     );
   }
 
-  const currentGroupDetails = groupConversations.find((group) => group.jid === activeGroupJid);
+  const currentGroupDetails = groupConversations.find(
+    (group) => group.jid === activeGroupJid
+  );
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex">
@@ -1242,10 +1575,14 @@ const GroupPage: React.FC = () => {
             <>
               <ChatHeader
                 activeConversation={activeGroupJid}
-                getDisplayName={(jid) => getDisplayName(jid, groupConversations)}
+                getDisplayName={(jid) =>
+                  getDisplayName(jid, groupConversations)
+                }
                 getAvatarColor={getAvatarColor}
                 onCallClick={() => console.log("Group call not implemented")}
-                onVideoClick={() => console.log("Group video call not implemented")}
+                onVideoClick={() =>
+                  console.log("Group video call not implemented")
+                }
                 onInfoClick={() => setShowUserInfoModal(true)}
               />
               <div className="flex-1 overflow-y-auto">
@@ -1267,7 +1604,11 @@ const GroupPage: React.FC = () => {
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <div className="w-60 h-60 flex items-center justify-center mx-auto mb-4">
-                  <img src="/empty1.svg" alt="Group Avatar" className="w-full h-full" />
+                  <img
+                    src="/empty1.svg"
+                    alt="Group Avatar"
+                    className="w-full h-full"
+                  />
                 </div>
               </div>
             </div>

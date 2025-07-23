@@ -42,8 +42,14 @@ export const GroupRoomList: React.FC<GroupRoomListProps> = ({
   };
 
   const filteredGroups = groupConversations.filter((group) =>
-    getDisplayName(group.jid).toLowerCase().includes(searchQuery.toLowerCase())
+    group.jid && typeof getDisplayName(group.jid) === "string"
+      ? getDisplayName(group.jid)
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
+      : false
   );
+
+  console.log("Rendering GroupRoomList with filteredGroups:", filteredGroups);
 
   return (
     <div className="w-80 flex flex-col bg-gray-100 dark:bg-[var(--background)]">
@@ -83,13 +89,13 @@ export const GroupRoomList: React.FC<GroupRoomListProps> = ({
           >
             <button
               onClick={() => handleMenuOptionClick("New Group")}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               New Group
             </button>
             <button
               onClick={() => handleMenuOptionClick("Starred Groups")}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700"
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               Starred Groups
             </button>
@@ -136,68 +142,90 @@ export const GroupRoomList: React.FC<GroupRoomListProps> = ({
           </div>
         ) : filteredGroups.length === 0 ? (
           <div className="p-6 text-center">
-
-            <p className="text-sm mb-3 text-gray-500 dark:text-gray-400">
-              No groups yet
-            </p>
-            <button
+            <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
+              <img
+                src="/groups.svg"
+                alt="No conversations"
+                className="w-12 h-12"
+              />
+            </div>
+            <p className="text-sm mb-3">No groups yet</p>
+            {/* <button
               onClick={fetchExistingGroups}
               disabled={!connected}
               className="text-blue-500 hover:text-blue-600 dark:hover:text-blue-400 disabled:text-gray-400 dark:disabled:text-gray-500 text-sm font-medium"
             >
               Try to load groups
-            </button>
+            </button> */}
           </div>
         ) : (
           <div>
-            {filteredGroups.map((group) => (
-              <div
-                key={group.jid}
-                onClick={() => onGroupSelect(group.jid)}
-                className={`px-4 py-4 hover:bg-gray-50 hover:rounded-lg cursor-pointer transition-colors ${
-                  activeGroupJid === group.jid
-                    ? "bg-blue-50 dark:bg-blue-900/20 rounded-lg"
-                    : ""
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="relative flex-shrink-0">
-                    <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${getAvatarColor()}`}
-                    >
-                      <span className="text-lg">
-                        {group.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-base font-semibold truncate mb-1">
-                          {group.name}
-                        </p>
-                        <p className="text-sm truncate">
-                          {group.lastMessage}
-                        </p>
+            {filteredGroups.map((group) => {
+              // Validate group properties
+              if (!group.jid || !group.name || !group.lastMessageTime) {
+                console.warn("Skipping invalid group:", group);
+                return null;
+              }
+              const isValidDate =
+                group.lastMessageTime instanceof Date &&
+                !isNaN(group.lastMessageTime.getTime());
+              return (
+                <div
+                  key={group.jid}
+                  onClick={() => group.jid && onGroupSelect(group.jid)}
+                  className={`px-4 py-4 hover:bg-gray-50 hover:rounded-lg cursor-pointer transition-colors ${
+                    activeGroupJid === group.jid
+                      ? "bg-blue-50 dark:bg-blue-900/20 rounded-lg"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="relative flex-shrink-0">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${getAvatarColor()}`}
+                      >
+                        <span className="text-lg">
+                          {(group.name || "U").charAt(0).toUpperCase()}
+                        </span>
                       </div>
-                      <div className="flex flex-col items-end ml-2">
-                        <p className="text-xs mb-1">
-                          {group.lastMessageTime.toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                        {group.unreadCount > 0 && (
-                          <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-500 rounded-full">
-                            {group.unreadCount > 9 ? "9+" : group.unreadCount}
-                          </span>
-                        )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-base font-semibold truncate mb-1">
+                            {group.name || "Unnamed Group"}
+                          </p>
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm truncate">
+                              {group.lastMessage || "No messages"}
+                            </p>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              • {group.memberCount ?? 0}{" "}
+                              {group.memberCount === 1 ? "member" : "members"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end ml-2">
+                          <p className="text-xs mb-1">
+                            {isValidDate
+                              ? group.lastMessageTime.toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "Unknown"}
+                          </p>
+                          {group.unreadCount > 0 && (
+                            <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-500 rounded-full">
+                              {group.unreadCount > 9 ? "9+" : group.unreadCount}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

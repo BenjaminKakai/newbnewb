@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = 'wss://dev-api-gateway.wasaachat.com:9638';
+const SOCKET_URL = 'wss://calls-dev.wasaachat.com';
 
 interface UseSocketReturn {
   socket: Socket | null;

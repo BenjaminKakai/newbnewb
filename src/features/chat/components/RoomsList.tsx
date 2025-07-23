@@ -68,7 +68,6 @@ const StatusComponent: React.FC<{
   return (
     <div className="text-[var(--foreground)] rounded-lg mb-4">
       <div className="flex justify-end items-center mb-4">
-        {/* <h2 className="text-sm">Status</h2> */}
         <h2 className="text-sm">All Status</h2>
       </div>
 
@@ -104,51 +103,54 @@ const StatusComponent: React.FC<{
         <div className="flex-1 grid grid-cols-2 gap-2">
           {statusUsers.slice(0, 4).map((user, index) => (
             <div key={user.id} className="flex flex-col items-center space-y-3">
-              <button
-                onClick={() => onStatusClick(user, index)}
-                className={`relative w-24 h-24 rounded-2xl overflow-hidden border-3 transition-all ${
-                  user.statuses.some((s) => !s.isViewed)
-                    ? "border-blue-400 ring-2 ring-blue-400/40"
-                    : "border-gray-600"
-                }`}
-              >
-                {/* Status Preview */}
-                {user.statuses.length > 0 &&
-                user.statuses[0].type === "image" &&
-                user.statuses[0].imageUrl ? (
-                  <img
-                    src={user.statuses[0].imageUrl}
-                    alt={`${user.name}'s status`}
-                    className="w-full h-full object-cover"
-                  />
-                ) : user.statuses.length > 0 &&
-                  user.statuses[0].type === "text" ? (
-                  <div
-                    className="w-full h-full flex items-center justify-center text-xs font-medium p-3 text-center"
-                    style={{
-                      backgroundColor:
-                        user.statuses[0].backgroundColor || "#3B82F6",
-                      color: user.statuses[0].textColor || "#FFFFFF",
-                    }}
-                  >
-                    {user.statuses[0].content.length > 25
-                      ? user.statuses[0].content.substring(0, 25) + "..."
-                      : user.statuses[0].content}
-                  </div>
-                ) : user.avatar ? (
-                  <img
-                    src={user.avatar}
-                    alt={user.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-600 flex items-center justify-center text-white font-semibold text-xl">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
+              {/* Container for card + avatar */}
+              <div className="relative">
+                <button
+                  onClick={() => onStatusClick(user, index)}
+                  className={`relative w-24 h-24 rounded-2xl overflow-hidden border-3 transition-all ${
+                    user.statuses.some((s) => !s.isViewed)
+                      ? "border-blue-400 ring-2 ring-blue-400/40"
+                      : "border-gray-600"
+                  }`}
+                >
+                  {/* Status Preview */}
+                  {user.statuses.length > 0 &&
+                  user.statuses[0].type === "image" &&
+                  user.statuses[0].imageUrl ? (
+                    <img
+                      src={user.statuses[0].imageUrl}
+                      alt={`${user.name}'s status`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : user.statuses.length > 0 &&
+                    user.statuses[0].type === "text" ? (
+                    <div
+                      className="w-full h-full flex items-center justify-center text-xs font-medium p-3 text-center"
+                      style={{
+                        backgroundColor:
+                          user.statuses[0].backgroundColor || "#3B82F6",
+                        color: user.statuses[0].textColor || "#FFFFFF",
+                      }}
+                    >
+                      {user.statuses[0].content.length > 25
+                        ? user.statuses[0].content.substring(0, 25) + "..."
+                        : user.statuses[0].content}
+                    </div>
+                  ) : user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-600 flex items-center justify-center text-white font-semibold text-xl">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </button>
 
-                {/* User Avatar Overlay */}
-                <div className="absolute -bottom-2 left-6 w-10 h-10 rounded-full border-3 border-gray-900 overflow-hidden z-80">
+                {/* User Avatar Overlay - MOVED OUTSIDE BUTTON */}
+                <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-10 h-10 rounded-full border-3 border-gray-900 overflow-hidden z-10">
                   {user.avatar ? (
                     <img
                       src={user.avatar}
@@ -161,7 +163,7 @@ const StatusComponent: React.FC<{
                     </div>
                   )}
                 </div>
-              </button>
+              </div>
 
               {/* User Name */}
               <div className="text-sm font-medium text-center truncate max-w-24">
@@ -595,29 +597,21 @@ const RoomList: React.FC<RoomListProps> = ({
           </div>
         ) : filteredConversations().length === 0 ? (
           <div className="p-6 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg
-                className="w-8 h-8 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
+            <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
+              <img
+                src="/chats.svg"
+                alt="No conversations"
+                className="w-12 h-12"
+              />
             </div>
             <p className="text-sm mb-3">No conversations yet</p>
-            <button
+            {/* <button
               onClick={fetchExistingConversations}
               disabled={!connected}
               className="text-blue-500 hover:text-blue-600 disabled:text-gray-400 text-sm font-medium"
             >
               Try to load conversations
-            </button>
+            </button> */}
           </div>
         ) : (
           <div className="overflow-y-auto h-[calc(100vh-200px)]">

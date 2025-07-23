@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "react-hot-toast";
 import { Sun, Moon } from "lucide-react";
+import Link from "next/link";
 
 interface SidebarNavProps {
   onClose: () => void;
@@ -26,7 +27,9 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
   // Initialize theme from localStorage or system preference
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
     const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
     setTheme(initialTheme);
   }, []);
@@ -85,7 +88,8 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
     if (!user) return "GU";
     if (user.firstName) {
       const first = user.firstName[0];
-      const last = user.lastName && user.lastName.trim() ? user.lastName[0] : "";
+      const last =
+        user.lastName && user.lastName.trim() ? user.lastName[0] : "";
       return last
         ? `${first}${last}`.toUpperCase()
         : `${first}${user.firstName[1] || ""}`.toUpperCase();
@@ -227,8 +231,12 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
         <button
           onClick={toggleTheme}
           className="flex flex-col items-center p-2 cursor-pointer rounded-lg transition-all duration-200 group w-full text-gray-600 dark:text-gray-300  hover:scale-105"
-          title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          aria-label={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          title={
+            theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"
+          }
+          aria-label={
+            theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"
+          }
         >
           <div className="mb-1">
             {theme === "dark" ? (
@@ -243,7 +251,8 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
         </button>
 
         {/* Profile */}
-        <button
+        <Link
+          href="/settings"
           className="flex flex-col items-center p-2 cursor-pointer rounded-lg transition-all duration-200 group w-full hover:scale-105"
           title="Profile Settings"
         >
@@ -255,16 +264,14 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
                 className="w-8 h-8 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600"
               />
             ) : (
-              <div
-                className="w-8 h-8 rounded-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center border-2 border-gray-200 dark:border-gray-600"
-              >
+              <div className="w-8 h-8 rounded-full bg-gray-400 dark:bg-gray-600 flex items-center justify-center border-2 border-gray-200 dark:border-gray-600">
                 <span className="text-white font-semibold text-xs">
                   {getUserInitials()}
                 </span>
               </div>
             )}
           </div>
-        </button>
+        </Link>
 
         {/* Logout */}
         <button

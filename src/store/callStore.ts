@@ -81,7 +81,7 @@ interface CallState {
   setRemoteStream: (stream: MediaStream | null) => void;
 }
 
-const API_BASE_URL = "https://dev-api-gateway.wasaachat.com:9638/v1";
+const API_BASE_URL = "https://calls-dev.wasaachat.com/v1";
 const API_KEY = "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
 
 export const useCallStore = create<CallState>()(

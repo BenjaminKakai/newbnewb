@@ -3,7 +3,7 @@ import { useRef, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useCallStore } from './callStore';
 
-const SOCKET_URL = 'wss://dev-api-gateway.wasaachat.com:9638';
+const SOCKET_URL = 'wss://call-dev.wasaachat.com';
 
 interface CallInitiation {
   participantIds: string[];

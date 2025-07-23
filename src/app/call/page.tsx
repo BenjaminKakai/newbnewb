@@ -26,7 +26,7 @@ import { useNotification } from "@/features/calls/components/NotificationContext
 import SidebarNav from "@/components/SidebarNav";
 
 // 🌐 Use your working configuration
-const SERVER_IP = "dev-api-gateway.wasaachat.com";
+const SERVER_IP = "calls-dev.wasaachat.com";
 const API_BASE_URL = `https://${SERVER_IP}:9638/v1`;
 
 interface IncomingCallData {

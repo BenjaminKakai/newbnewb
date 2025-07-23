@@ -160,6 +160,8 @@ const ChatPage: React.FC = () => {
     }
   }, [currentUser?.id]);
 
+  console.log("Token:", accessToken);
+
   // Fetch contacts
   useEffect(() => {
     if (currentUser?.id && accessToken) {
