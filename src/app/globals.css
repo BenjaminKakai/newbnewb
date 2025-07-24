@@ -1,28 +1,32 @@
+/* app/globals.css */
 @import "tailwindcss";
 
 :root {
   --background: #ffffff;
   --foreground: #292929;
   --bg-card: #f7f7f7;
+  --font-urbanist: "Urbanist", Arial, Helvetica, sans-serif;
+  --font-geist-sans: "Urbanist", Arial, Helvetica, sans-serif; /* Fallback or import Geist Sans */
+  --font-geist-mono: "Urbanist", monospace; /* Fallback or import Geist Mono */
 }
 
 .dark {
   --background: #292929;
   --foreground: #ededed;
-  --bg-card: #f7f7f7;
+  --bg-card: #3a3a3a; /* Darker card background for dark mode */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-urbanist);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-montserrat), Arial, Helvetica, sans-serif;
+  font-family: var(--font-urbanist);
 }
 
 @layer utilities {

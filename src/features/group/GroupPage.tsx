@@ -286,44 +286,24 @@ const GroupPage: React.FC = () => {
     );
   };
 
+  // Initialize XMPP connection
   useEffect(() => {
-    xmppClient.updateCallbacks({
-      onConnectionStatusChange: (status, connected) => {
-        setConnectionStatus(status);
-        setConnected(connected);
-        if (!connected) {
-          setConnectionError(`Connection status: ${status}`);
-        } else {
-          setConnectionError(null);
-          fetchExistingGroups();
-        }
-      },
-      onMessage: (message) => {
-        if (message.type === "groupchat") {
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === message.id)) return prev;
-            return [...prev, message].sort(
-              (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-            );
-          });
-          updateGroupConversationsList(
-            message.to,
-            message.text,
-            message.timestamp,
-            message.to !== activeGroupJid
-          );
-        }
-      },
-      onPresence: (jid, presence) => {
-        if (jid.includes(`@${CONFERENCE_DOMAIN}`)) {
-          onPresence({ getAttribute: () => jid, getAttribute: (attr) => presence === "unavailable" ? "unavailable" : null });
-        }
-      },
-    });
+    connectionRef.current = new Strophe.Connection(BOSH_SERVICE);
+    connectionRef.current.xmlInput = (body: any) => console.log("RECV:", body);
+    connectionRef.current.xmlOutput = (body: any) => console.log("SEND:", body);
+
     return () => {
-      xmppClient.disconnect();
+      if (connectionRef.current && connected) {
+        if (mamHandlerRef.current) {
+          connectionRef.current.deleteHandler(mamHandlerRef.current);
+        }
+        if (presenceHandlerRef.current) {
+          connectionRef.current.deleteHandler(presenceHandlerRef.current);
+        }
+        connectionRef.current.disconnect();
+      }
     };
-  }, []);
+  }, [connected]);
 
   // Connect to XMPP
   useEffect(() => {

@@ -1,6 +1,7 @@
 import React from "react";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
+import { getFcmToken } from "@/utils/firebase";
 
 // Types
 interface User {
@@ -26,7 +27,6 @@ interface User {
   gender?: string;
 }
 
-// API User interface for login responses
 interface ApiUser {
   id: string;
   first_name: string;
@@ -58,14 +58,13 @@ interface AuthState {
     phoneNumber: string;
     countryCode: string;
     country: string;
-    fcmToken?: string;
   }) => Promise<string>;
   generateQRCode: () => Promise<string>;
   verifyOtp: (data: {
     userId: string;
     otp: string;
     source: string;
-  }) => Promise<string | null>; // Returns next KYC step or null
+  }) => Promise<string | null>;
   loginWithQRCode: (data: {
     accessToken: string;
     refreshToken?: string;
@@ -75,7 +74,6 @@ interface AuthState {
     userId: string;
     source: string;
     userType: string;
-    fcmToken: string;
   }) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -90,13 +88,11 @@ interface AuthState {
   refreshUserData: () => Promise<void>;
 }
 
-// API Configuration
 const API_BASE_URL = "http://138.68.190.213:3010";
 const API_KEY =
   process.env.NEXT_PUBLIC_API_KEY ||
   "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
 
-// Helper function to get default headers
 const getDefaultHeaders = (accessToken?: string) => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -110,7 +106,6 @@ const getDefaultHeaders = (accessToken?: string) => {
   return headers;
 };
 
-// Store implementation
 export const useAuthStore = create<AuthState>()(
   devtools(
     persist(
@@ -128,12 +123,13 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, error: null });
 
           try {
+            const fcmToken = await getFcmToken();
             const formData = {
               login_type: "phone_number",
               phone_number: credentials.phoneNumber,
               country_code: credentials.countryCode,
               country: credentials.country,
-              fcm_token: credentials.fcmToken || "sample_fcm_token",
+              fcm_token: fcmToken || "sample_fcm_token",
               source: "web",
               app_id: "web_app",
             };
@@ -243,7 +239,6 @@ export const useAuthStore = create<AuthState>()(
               throw new Error(data.message || "OTP verification failed");
             }
 
-            // Create user object from API response
             const userData: User = {
               id: data.user.id,
               name: `${data.user.first_name} ${data.user.last_name}`.trim(),
@@ -262,14 +257,12 @@ export const useAuthStore = create<AuthState>()(
               idNumberVerified: data.user.id_number_verified,
             };
 
-            // Store tokens and user data in localStorage
             localStorage.setItem("access_token", data.tokens.access_token);
             if (data.tokens.refresh_token) {
               localStorage.setItem("refresh_token", data.tokens.refresh_token);
             }
             localStorage.setItem("user_data", JSON.stringify(userData));
 
-            // Update state
             set({
               accessToken: data.tokens.access_token,
               refreshToken: data.tokens.refresh_token,
@@ -280,7 +273,6 @@ export const useAuthStore = create<AuthState>()(
               userId: data.user.id,
             });
 
-            // Determine next KYC step
             if (data.user.kyc_level === "basic") {
               if (!data.user.id_number_verified) {
                 return "/profile/verify-id";
@@ -295,7 +287,7 @@ export const useAuthStore = create<AuthState>()(
               return "/profile/complete";
             }
 
-            return "/chat"; // Fallback
+            return "/chat";
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : "OTP verification failed";
@@ -357,10 +349,11 @@ export const useAuthStore = create<AuthState>()(
           }
         },
 
-        resendOtp: async ({ userId, source, userType, fcmToken }) => {
+        resendOtp: async ({ userId, source, userType }) => {
           set({ isLoading: true, error: null });
 
           try {
+            const fcmToken = await getFcmToken();
             const response = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
               method: "POST",
               headers: getDefaultHeaders(),
@@ -368,7 +361,7 @@ export const useAuthStore = create<AuthState>()(
                 user_id: userId,
                 source,
                 user_type: userType,
-                fcm_token: fcmToken,
+                fcm_token: fcmToken || "sample_fcm_token",
               }),
             });
 
@@ -617,7 +610,6 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Selectors
 export const useUser = () => useAuthStore((state) => state.user);
 export const useIsAuthenticated = () =>
   useAuthStore((state) => state.isAuthenticated);

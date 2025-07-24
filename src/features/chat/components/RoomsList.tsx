@@ -1,9 +1,13 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
+import { useSocket } from "@/services/notificationSocket";
 import NewChatModal from "./NewChatModal";
 import StatusViewerModal from "./StatusViewerModal";
 import StatusUploadModal from "./StatuUploadModal";
 import { toast } from "react-hot-toast";
+import { Bell } from "lucide-react";
 
 interface Conversation {
   jid: string;
@@ -50,6 +54,31 @@ interface StatusData {
   image?: File;
 }
 
+interface Notification {
+  id: string;
+  user_id: string;
+  channel: string;
+  user_email: string | null;
+  user_phone: string;
+  origin_service: string;
+  template_id: string;
+  entity_id: string;
+  entity_type: string;
+  type: string;
+  payload: { name: string; time: string };
+  body: string;
+  status: string;
+  delivered_at: string | null;
+  attempts: number;
+  read_receipt: boolean;
+  priority: string;
+  imageUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  template: { id: string; template_code: string; title: string; language: string };
+}
+
 interface RoomListProps {
   conversations: Conversation[];
   activeConversation: string;
@@ -59,6 +88,67 @@ interface RoomListProps {
   fetchExistingConversations: () => void;
   contacts: Contact[];
 }
+
+const NotificationsModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  notifications: Notification[];
+  position: { x: number; y: number };
+  onMarkAsRead: (notificationId: string) => void;
+  onMarkAllAsRead: () => void;
+}> = ({ isOpen, onClose, notifications, position, onMarkAsRead, onMarkAllAsRead }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="absolute bg-white rounded-lg shadow-xl border border-gray-200 p-4 w-80 max-h-96 overflow-y-auto z-50"
+      style={{ top: `${position.y}px`, left: `${position.x - 260}px` }}
+    >
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-lg font-semibold">Notifications</h3>
+        <button
+          onClick={onMarkAllAsRead}
+          className="text-sm text-blue-500 hover:text-blue-600"
+        >
+          Mark all as read
+        </button>
+      </div>
+      {notifications.length === 0 ? (
+        <p className="text-sm text-gray-500">No notifications</p>
+      ) : (
+        notifications.map((notification) => (
+          <div
+            key={notification.id}
+            className={`p-3 mb-2 rounded-lg ${
+              notification.read_receipt ? "bg-gray-100" : "bg-blue-50"
+            }`}
+          >
+            <p className="text-sm">{notification.body}</p>
+            <div className="flex justify-between items-center mt-2">
+              <span className="text-xs text-gray-500">
+                {new Date(notification.createdAt).toLocaleTimeString()}
+              </span>
+              {!notification.read_receipt && (
+                <button
+                  onClick={() => onMarkAsRead(notification.id)}
+                  className="text-xs text-blue-500 hover:text-blue-600"
+                >
+                  Mark as read
+                </button>
+              )}
+            </div>
+          </div>
+        ))
+      )}
+      <button
+        onClick={onClose}
+        className="w-full mt-3 text-center text-sm text-gray-500 hover:text-gray-700"
+      >
+        Close
+      </button>
+    </div>
+  );
+};
 
 const StatusComponent: React.FC<{
   statusUsers: StatusUser[];
@@ -72,10 +162,12 @@ const StatusComponent: React.FC<{
       </div>
 
       <div className="flex space-x-6">
-        {/* Add Status Section */}
         <div className="flex flex-col items-center space-y-3 min-w-0">
           <button
-            onClick={onAddStatusClick}
+            onClick={() => {
+              console.log("Add Status button clicked");
+              onAddStatusClick();
+            }}
             className="relative w-20 h-24 rounded-2xl bg-gray-300 flex items-center justify-center hover:bg-gray-600 transition-colors"
           >
             <div className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center">
@@ -99,21 +191,24 @@ const StatusComponent: React.FC<{
           </div>
         </div>
 
-        {/* Status Users Grid */}
         <div className="flex-1 grid grid-cols-2 gap-2">
           {statusUsers.slice(0, 4).map((user, index) => (
             <div key={user.id} className="flex flex-col items-center space-y-3">
-              {/* Container for card + avatar */}
               <div className="relative">
                 <button
                   onClick={() => onStatusClick(user, index)}
-                  className={`relative w-24 h-24 rounded-2xl overflow-hidden border-3 transition-all ${
+                  className={`relative w-24 h-24 overflow-hidden border-3 transition-all ${
                     user.statuses.some((s) => !s.isViewed)
                       ? "border-blue-400 ring-2 ring-blue-400/40"
                       : "border-gray-600"
                   }`}
+                  style={{
+                    borderTopLeftRadius: "1rem",
+                    borderTopRightRadius: "1rem",
+                    borderBottomLeftRadius: "1.5rem",
+                    borderBottomRightRadius: "1.5rem",
+                  }}
                 >
-                  {/* Status Preview */}
                   {user.statuses.length > 0 &&
                   user.statuses[0].type === "image" &&
                   user.statuses[0].imageUrl ? (
@@ -149,7 +244,6 @@ const StatusComponent: React.FC<{
                   )}
                 </button>
 
-                {/* User Avatar Overlay - MOVED OUTSIDE BUTTON */}
                 <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-10 h-10 rounded-full border-3 border-gray-900 overflow-hidden z-10">
                   {user.avatar ? (
                     <img
@@ -165,7 +259,6 @@ const StatusComponent: React.FC<{
                 </div>
               </div>
 
-              {/* User Name */}
               <div className="text-sm font-medium text-center truncate max-w-24">
                 {user.name}
               </div>
@@ -187,6 +280,7 @@ const RoomList: React.FC<RoomListProps> = ({
   contacts,
 }) => {
   const { user, accessToken } = useAuthStore();
+  const { notifications, markAsRead, markAllAsRead } = useSocket();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -198,6 +292,8 @@ const RoomList: React.FC<RoomListProps> = ({
   const [selectedStatusUser, setSelectedStatusUser] =
     useState<StatusUser | null>(null);
   const [selectedUserIndex, setSelectedUserIndex] = useState(0);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [notificationPosition, setNotificationPosition] = useState({ x: 0, y: 0 });
 
   const getDisplayName = (jid: string) => {
     const username = jid.split("@")[0];
@@ -226,18 +322,23 @@ const RoomList: React.FC<RoomListProps> = ({
     onConversationSelect(jid);
   };
 
+  const handleBellClick = (event: React.MouseEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setNotificationPosition({ x: rect.right, y: rect.bottom + 5 });
+    setShowNotificationsModal(!showNotificationsModal);
+  };
+
   const filteredConversations = () => {
     switch (activeTab) {
       case "Unread":
         return conversations.filter((conv) => conv.unreadCount > 0);
       case "Starred":
-        return conversations.filter((conv) => false); // Placeholder
+        return conversations.filter((conv) => false);
       default:
         return conversations;
     }
   };
 
-  // Fetch statuses and map to StatusUser
   useEffect(() => {
     const fetchStatuses = async () => {
       setIsLoadingStatuses(true);
@@ -249,7 +350,6 @@ const RoomList: React.FC<RoomListProps> = ({
         const data = await response.json();
         const rawStatuses = data.data || [];
 
-        // Group statuses by userId and map to StatusUser
         const statusUsersMap: { [key: string]: StatusUser } = {};
         rawStatuses.forEach((status: any) => {
           const userId = status.userId;
@@ -258,9 +358,9 @@ const RoomList: React.FC<RoomListProps> = ({
             id: status.id,
             type: status.media.length > 0 ? status.media[0].type : "text",
             content: status.content,
-            backgroundColor: "#3B82F6", // Default for text
-            textColor: "#FFFFFF", // Default for text
-            font: "font-sans", // Default for text
+            backgroundColor: "#3B82F6",
+            textColor: "#FFFFFF",
+            font: "font-sans",
             imageUrl:
               status.media.length > 0 && status.media[0].type === "image"
                 ? status.media[0].url
@@ -271,7 +371,7 @@ const RoomList: React.FC<RoomListProps> = ({
                 : undefined,
             timestamp: status.createdAt,
             views: status.views,
-            isViewed: false, // Assume not viewed initially
+            isViewed: false,
           };
 
           if (!statusUsersMap[userId]) {
@@ -287,7 +387,6 @@ const RoomList: React.FC<RoomListProps> = ({
 
         const mappedStatuses: StatusUser[] = Object.values(statusUsersMap);
 
-        // Add dummy statuses if none
         if (mappedStatuses.length === 0) {
           mappedStatuses.push(
             {
@@ -330,7 +429,6 @@ const RoomList: React.FC<RoomListProps> = ({
       } catch (error) {
         console.error("Failed to fetch statuses:", error);
         toast.error("Failed to load statuses");
-        // Add dummy statuses on error
         setStatusUsers([
           {
             id: "dummy1",
@@ -384,8 +482,13 @@ const RoomList: React.FC<RoomListProps> = ({
   };
 
   const handleAddStatusClick = () => {
+    console.log("Add Status clicked, setting showStatusUpload to true");
     setShowStatusUpload(true);
   };
+
+  useEffect(() => {
+    console.log("showStatusUpload state changed:", showStatusUpload);
+  }, [showStatusUpload]);
 
   const handleStatusUpload = async (statusData: StatusData) => {
     try {
@@ -412,7 +515,6 @@ const RoomList: React.FC<RoomListProps> = ({
       if (!response.ok) throw new Error("Failed to upload status");
       toast.success("Status uploaded successfully");
 
-      // Refetch statuses
       const fetchResponse = await fetch(
         "http://138.68.190.213:38472/v1/status",
         {
@@ -463,7 +565,7 @@ const RoomList: React.FC<RoomListProps> = ({
   };
 
   return (
-    <div className="w-90 bg-[var(--background)] text-[var(--foreground)] border-r border-gray-200 flex flex-col">
+    <div className="w-90 bg-[var(--background)] text-[var(--foreground)] shadow-lg flex flex-col">
       <div className="p-4 pb-3">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Chats</h1>
@@ -483,6 +585,10 @@ const RoomList: React.FC<RoomListProps> = ({
                 />
               </svg>
             </button>
+            <Bell
+              className="w-5 h-5 text-gray-500 hover:text-gray-700 cursor-pointer"
+              onClick={handleBellClick}
+            />
             <button
               onClick={handleMenuToggle}
               className="p-2 hover:text-gray-700"
@@ -495,29 +601,37 @@ const RoomList: React.FC<RoomListProps> = ({
         </div>
         {menuOpen && (
           <div
-            className="absolute border border-gray-200 rounded-md shadow-lg py-2 w-32 z-50"
+            className="absolute border border-gray-200 bg-[var(--background)] rounded-md shadow-lg py-2 w-32 z-50"
             style={{ top: `${menuPosition.y}px`, left: `${menuPosition.x}px` }}
           >
             <button
               onClick={() => handleMenuOptionClick("New Chat")}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              className="w-full text-left px-4 py-2 text-sm text-[var(--foreground)] cursor-pointer"
             >
               New Chat
             </button>
             <button
               onClick={() => handleMenuOptionClick("Starred Messages")}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              className="w-full text-left px-4 py-2 text-sm text-[var(--foreground)] cursor-pointer"
             >
               Starred Messages
             </button>
             <button
               onClick={() => handleMenuOptionClick("Select Chats")}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              className="w-full text-left px-4 py-2 text-sm text-[var(--foreground)] cursor-pointer"
             >
               Select Chats
             </button>
           </div>
         )}
+        <NotificationsModal
+          isOpen={showNotificationsModal}
+          onClose={() => setShowNotificationsModal(false)}
+          notifications={notifications}
+          position={notificationPosition}
+          onMarkAsRead={markAsRead}
+          onMarkAllAsRead={markAllAsRead}
+        />
         <div className="relative mb-4">
           <input
             type="text"
@@ -540,7 +654,6 @@ const RoomList: React.FC<RoomListProps> = ({
             </svg>
           </div>
         </div>
-        {/* Status Section */}
         {isLoadingStatuses ? (
           <div className="flex items-center justify-center py-4">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
@@ -605,13 +718,6 @@ const RoomList: React.FC<RoomListProps> = ({
               />
             </div>
             <p className="text-sm mb-3">No conversations yet</p>
-            {/* <button
-              onClick={fetchExistingConversations}
-              disabled={!connected}
-              className="text-blue-500 hover:text-blue-600 disabled:text-gray-400 text-sm font-medium"
-            >
-              Try to load conversations
-            </button> */}
           </div>
         ) : (
           <div className="overflow-y-auto h-[calc(100vh-200px)]">
@@ -619,9 +725,9 @@ const RoomList: React.FC<RoomListProps> = ({
               <div
                 key={conv.jid}
                 onClick={() => onConversationSelect(conv.jid)}
-                className={`px-4 py-4 hover:bg-gray-100 hover:rounded-lg cursor-pointer transition-colors ${
+                className={`px-4 py-4 hover:bg-[var(--bg-card)] hover:rounded-lg cursor-pointer transition-colors ${
                   activeConversation === conv.jid
-                    ? "bg-gray-100 rounded-lg"
+                    ? "bg-[var(--bg-card)] rounded-lg"
                     : ""
                 }`}
               >

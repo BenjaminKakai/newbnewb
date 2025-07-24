@@ -1,4 +1,3 @@
-// src/app/call/page.tsx - COMPLETE FIXED VERSION WITH WEBRTC FIXES
 "use client";
 import React, {
   useEffect,
@@ -17,15 +16,17 @@ import {
   MicOff,
   VideoOff,
   PhoneOff,
+  UserPlus,
+  UserMinus,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
-import { useChatStore } from "@/store/chatStore";
+import { useContactsStore } from "@/store/contactsStore";
 import { useCallStore } from "@/store/callStore";
 import { useSocket } from "@/hooks/useSocket";
 import { useNotification } from "@/features/calls/components/NotificationContext";
 import SidebarNav from "@/components/SidebarNav";
 
-// 🌐 Use your working configuration
+// 🌐 Configuration
 const SERVER_IP = "calls-dev.wasaachat.com";
 const API_BASE_URL = `https://${SERVER_IP}:9638/v1`;
 
@@ -62,16 +63,50 @@ interface IceCandidateData {
   senderId?: string;
 }
 
+interface FriendRequest {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: string;
+  created_at: string;
+  sender_name?: string;
+}
+
+interface CallHistoryItem {
+  id: string;
+  direction: "incoming" | "outgoing";
+  otherPartyId: string;
+  otherPartyName: string;
+  type: "video" | "audio";
+  status: "ended" | "missed" | "completed";
+  duration: number;
+  initiatedAt: string;
+  startTime: string;
+  endTime: string;
+}
+
 const Call: React.FC = () => {
   const pathname = usePathname();
   const { user, accessToken } = useAuthStore();
-  const { contacts, getContactName } = useChatStore();
+  const {
+    contacts,
+    friendRequests,
+    getContactName,
+    fetchContacts,
+    fetchFriendRequests,
+    acceptFriendRequest,
+    rejectFriendRequest,
+  } = useContactsStore();
   const { callHistory, currentTab, setCurrentTab, fetchCallHistory } =
     useCallStore();
-
   const { addNotification } = useNotification();
   const [searchQuery, setSearchQuery] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
+  const [isFetching, setIsFetching] = useState({
+    contacts: false,
+    friendRequests: false,
+    callHistory: false,
+  });
 
   // Call state
   const [incomingCall, setIncomingCall] = useState<IncomingCallData | null>(
@@ -115,6 +150,34 @@ const Call: React.FC = () => {
   // Socket connection
   const { socket, isConnected } = useSocket(accessToken, addLog);
 
+  // Debounce function to limit API calls
+  const debounce = useCallback(
+    <T extends (...args: any[]) => any>(func: T, wait: number) => {
+      let timeout: NodeJS.Timeout;
+      return (...args: Parameters<T>): Promise<ReturnType<T>> => {
+        return new Promise((resolve) => {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => resolve(func(...args)), wait);
+        });
+      };
+    },
+    []
+  );
+
+  // Debounced fetch functions
+  const debouncedFetchContacts = useMemo(
+    () => debounce(fetchContacts, 1000),
+    [fetchContacts]
+  );
+  const debouncedFetchFriendRequests = useMemo(
+    () => debounce(fetchFriendRequests, 1000),
+    [fetchFriendRequests]
+  );
+  const debouncedFetchCallHistory = useMemo(
+    () => debounce(fetchCallHistory, 1000),
+    [fetchCallHistory]
+  );
+
   // Cleanup function
   const cleanupConnection = useCallback(() => {
     addLog("🧹 Cleaning up failed connection...");
@@ -146,12 +209,10 @@ const Call: React.FC = () => {
     async (withVideo = true) => {
       try {
         addLog(`🎥 Initializing media (video: ${withVideo})`);
-        // Always request both audio and video
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: true,
         });
-        // If audio-only, disable video tracks (but keep them in the stream)
         if (!withVideo) {
           stream.getVideoTracks().forEach((track) => {
             track.enabled = false;
@@ -231,13 +292,7 @@ const Call: React.FC = () => {
     addNotification,
   ]);
 
-  // 🔧 FIXED: Accept call function with proper incoming call sequence
-  // (Removed duplicate declaration. See below for the actual implementation.)
-
-  // 🔧 FIXED: Start direct call function with proper outgoing call sequence
-  // (Removed duplicate declaration. See below for the actual implementation.)
-
-  // 🔧 FIXED: Socket event handlers with proper call flow
+  // Socket event handlers
   useEffect(() => {
     if (!socket) return;
 
@@ -281,7 +336,6 @@ const Call: React.FC = () => {
             `📥 PC state before setting answer: connection=${pc.connectionState}, signaling=${pc.signalingState}`
           );
 
-          // CRITICAL: Verify our local tracks are still present
           const senders = pc.getSenders();
           addLog(`📥 Current senders before answer: ${senders.length}`);
 
@@ -300,7 +354,6 @@ const Call: React.FC = () => {
             }
           });
 
-          // Re-add missing tracks BEFORE setting answer
           if (localStream) {
             const audioTracks = localStream.getAudioTracks();
             const videoTracks = localStream.getVideoTracks();
@@ -316,14 +369,12 @@ const Call: React.FC = () => {
             }
           }
 
-          // Set the remote description (answer)
           await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
           addLog("✅ Call answer processed successfully");
           addLog(
             `📥 PC state after setting answer: connection=${pc.connectionState}, signaling=${pc.signalingState}`
           );
 
-          // Verify tracks are still there after answer
           const sendersAfter = pc.getSenders();
           addLog(`📥 Senders after answer: ${sendersAfter.length}`);
           sendersAfter.forEach((sender, index) => {
@@ -354,7 +405,6 @@ const Call: React.FC = () => {
         `📥 ICE data: callId=${data.callId}, targetId=${data.targetId}, currentCallId=${currentCallId}, ourId=${user?.id}`
       );
 
-      // 🔧 CRITICAL FIX: Add validation for callId
       if (!data.callId) {
         addLog(`⚠️ ICE candidate ignored: missing callId in data`);
         return;
@@ -393,7 +443,6 @@ const Call: React.FC = () => {
       }
     };
 
-    // Register socket events
     socket.on("call-offer", handleCallOffer);
     socket.on("call-answer", handleCallAnswer);
     socket.on("call-ended", handleCallEnded);
@@ -415,13 +464,42 @@ const Call: React.FC = () => {
     endCall,
   ]);
 
-  // Initialize media when user changes
+  // Initialize data when user changes
   useEffect(() => {
     if (user?.id) {
       addLog(`[CALL PAGE] Initializing for user: ${user.id}`);
-      fetchCallHistory();
+      setIsFetching((prev) => ({
+        ...prev,
+        contacts: true,
+        friendRequests: true,
+        callHistory: true,
+      }));
+      Promise.all([
+        debouncedFetchContacts().then(() =>
+          setIsFetching((prev) => ({ ...prev, contacts: false }))
+        ),
+        debouncedFetchFriendRequests().then(() =>
+          setIsFetching((prev) => ({ ...prev, friendRequests: false }))
+        ),
+        debouncedFetchCallHistory().then(() =>
+          setIsFetching((prev) => ({ ...prev, callHistory: false }))
+        ),
+      ]).catch((error) => {
+        addLog(`❌ Error initializing data: ${error}`);
+        setIsFetching({
+          contacts: false,
+          friendRequests: false,
+          callHistory: false,
+        });
+      });
     }
-  }, [user?.id, fetchCallHistory, addLog]);
+  }, [
+    user?.id,
+    debouncedFetchContacts,
+    debouncedFetchFriendRequests,
+    debouncedFetchCallHistory,
+    addLog,
+  ]);
 
   // Debug effects
   useEffect(() => {
@@ -518,7 +596,6 @@ const Call: React.FC = () => {
     }
   };
 
-  // Debug functions
   const debugWebRTCState = useCallback(() => {
     addLog("🔍 === WebRTC State Debug ===");
     addLog(`🔍 Current Call ID: ${currentCallId || "None"}`);
@@ -618,7 +695,7 @@ const Call: React.FC = () => {
     }
   }, [currentCallId, monitorLocalTracks]);
 
-  const formatCallTime = (timestamp: Date) => {
+  const formatCallTime = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -632,11 +709,22 @@ const Call: React.FC = () => {
     return date.toLocaleDateString();
   };
 
+  const formatRequestTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const filteredCallHistory = callHistory.filter((call) => {
+    if (currentTab === "all") return true;
+    if (currentTab === "incoming") return call.type === "incoming";
     if (currentTab === "missed") return call.status === "missed";
-    if (currentTab === "pending")
-      return call.status === "completed" && call.type === "outgoing";
-    if (currentTab === "requests") return call.type === "incoming";
+    if (currentTab === "pending") return call.status === "completed" && call.type === "outgoing";
+    if (currentTab === "requests") return call.type === "incoming" && call.status !== "missed";
     return true;
   });
 
@@ -649,7 +737,12 @@ const Call: React.FC = () => {
     return isFirstOccurrence && matchesSearch;
   });
 
-  // --- NEW: Always show local video preview, even before call ---
+  const filteredFriendRequests = friendRequests.filter((request) =>
+    (request.sender_name || request.sender_id)
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase())
+  );
+
   useEffect(() => {
     if (!localStream && !currentCallId && localVideoRef.current) {
       localVideoRef.current.srcObject = null;
@@ -661,11 +754,9 @@ const Call: React.FC = () => {
     }
   }, [localStream, currentCallId]);
 
-  // --- NEW: Always initialize local media before call or accept ---
   const ensureLocalMedia = useCallback(
     async (withVideo: boolean) => {
       if (localStream) {
-        // If already have a stream, just update video track enabled state
         localStream
           .getVideoTracks()
           .forEach((track) => (track.enabled = withVideo));
@@ -688,7 +779,6 @@ const Call: React.FC = () => {
     [localStream]
   );
 
-  // --- UPDATE: Outgoing call flow ---
   const startDirectCall = async (
     recipientId: string,
     callType: "video" | "audio"
@@ -699,10 +789,8 @@ const Call: React.FC = () => {
     }
     try {
       addLog(`🚀 Starting ${callType} call to ${recipientId}`);
-      // STEP 1: Always get local media and show preview
       const stream = await ensureLocalMedia(callType === "video");
       if (!stream) throw new Error("Failed to initialize media");
-      // STEP 2: Call API to start call and get callId BEFORE creating peer connection
       const response = await fetch(`${API_BASE_URL}/calls`, {
         method: "POST",
         headers: {
@@ -724,12 +812,10 @@ const Call: React.FC = () => {
       addLog(`🔗 Starting call with ID: ${callId} to: ${recipientId}`);
       setCurrentCallId(callId);
       setCurrentTargetId(recipientId);
-      // STEP 3: Create peer connection and add local tracks
       addLog(
         `🔗 Creating peer connection for outgoing call to: ${recipientId}`
       );
       const pc = new RTCPeerConnection(rtcConfig);
-      // Add all local tracks
       stream.getTracks().forEach((track) => {
         pc.addTrack(track, stream);
         addLog(
@@ -737,7 +823,6 @@ const Call: React.FC = () => {
         );
       });
       addLog(`📤 Total tracks added: ${stream.getTracks().length}`);
-      // Set up event handlers
       pc.ontrack = (event) => {
         addLog(`📥 *** ONTRACK EVENT FIRED FOR OUTGOING CALL ***`);
         if (event.streams && event.streams[0]) {
@@ -782,16 +867,13 @@ const Call: React.FC = () => {
           cleanupConnection();
         }
       };
-      // STEP 4: Create and send offer
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       addLog(`✅ Created offer`);
       addLog(
         `📤 PC state after creating offer: connection=${pc.connectionState}, signaling=${pc.signalingState}`
       );
-      // STEP 5: Store peer connection before sending offer
       setPeerConnections(new Map([["direct-call", pc]]));
-      // STEP 6: Send offer via socket
       socket?.emit("call-offer", {
         callId: callId,
         targetId: recipientId,
@@ -814,7 +896,6 @@ const Call: React.FC = () => {
     }
   };
 
-  // --- UPDATE: Accept call flow ---
   const acceptCall = useCallback(
     async (callData: IncomingCallData) => {
       try {
@@ -831,13 +912,11 @@ const Call: React.FC = () => {
         setCurrentTargetId(callerId);
         setIncomingCall(null);
 
-        // STEP 1: Create peer connection
         addLog(
           `🔗 Creating peer connection for incoming call from: ${callerId}`
         );
         const pc = new RTCPeerConnection(rtcConfig);
 
-        // STEP 2: Set up event handlers BEFORE setting remote description
         pc.ontrack = (event) => {
           addLog(`📥 *** ONTRACK EVENT FIRED FOR INCOMING CALL ***`);
           addLog(
@@ -892,7 +971,6 @@ const Call: React.FC = () => {
           }
         };
 
-        // STEP 3: Set remote description (the offer)
         addLog(
           `📥 Setting remote description (offer) from ${callData.callerId}`
         );
@@ -901,12 +979,10 @@ const Call: React.FC = () => {
         );
         addLog(`✅ Remote description set successfully`);
 
-        // STEP 4: Get local media
         addLog("🎥 Getting local media for answer");
         const stream = await initMedia(callData.callType !== "audio");
         if (!stream) throw new Error("Failed to initialize media");
 
-        // STEP 5: Add all local tracks
         stream.getTracks().forEach((track) => {
           pc.addTrack(track, stream);
           addLog(
@@ -915,13 +991,11 @@ const Call: React.FC = () => {
         });
         addLog(`📤 Total tracks added: ${stream.getTracks().length}`);
 
-        // STEP 6: Create and set answer
         addLog("📤 Creating answer");
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         addLog(`✅ Answer created and set as local description`);
 
-        // STEP 7: Send answer via socket
         socket?.emit("call-answer", {
           callId: callId,
           targetId: callerId,
@@ -929,7 +1003,6 @@ const Call: React.FC = () => {
           receiverId: user?.id,
         });
 
-        // STEP 8: Store the peer connection
         setPeerConnections(new Map([["direct-call", pc]]));
         addLog("✅ Call accepted and answer sent");
         addNotification("Call accepted", "success");
@@ -964,14 +1037,12 @@ const Call: React.FC = () => {
     [socket, addLog]
   );
 
-  // Show call interface when in call
   if (
     (localStream || currentCallId) &&
     (remoteParticipants.length > 0 || currentCallId)
   ) {
     return (
       <div className="h-screen bg-black flex flex-col">
-        {/* Call Header */}
         <div className="p-4 text-white text-center">
           <h2 className="text-xl font-semibold">
             {remoteParticipants[0]?.name || "Call in Progress"}
@@ -982,9 +1053,6 @@ const Call: React.FC = () => {
                 isConnected ? "bg-green-400" : "bg-red-400"
               }`}
             />
-            {/* <span className="text-xs">
-              {isConnected ? "Connected" : "Disconnected"}
-            </span> */}
           </div>
           <div className="text-xs mt-1 space-x-4">
             <span>Local Stream: {localStream ? "✅" : "❌"}</span>
@@ -993,9 +1061,7 @@ const Call: React.FC = () => {
           </div>
         </div>
 
-        {/* Video Area */}
         <div className="flex-1 relative flex flex-row items-center justify-center gap-8 bg-black">
-          {/* Remote Video */}
           <div className="flex-1 flex items-center justify-center">
             <video
               ref={remoteVideoRef}
@@ -1023,7 +1089,6 @@ const Call: React.FC = () => {
               </div>
             )}
           </div>
-          {/* Local Video (Large PiP) */}
           <div className="w-64 h-48 bg-gray-900 rounded-xl overflow-hidden border-4 border-green-600 shadow-xl flex items-center justify-center">
             <video
               ref={localVideoRef}
@@ -1044,7 +1109,6 @@ const Call: React.FC = () => {
           </div>
         </div>
 
-        {/* Call Controls */}
         <div className="p-6 bg-gray-900">
           <div className="flex justify-center space-x-4">
             <button
@@ -1089,12 +1153,10 @@ const Call: React.FC = () => {
     );
   }
 
-  // Regular call page UI
   return (
     <div className="h-screen bg-[var(--background)] text-[var(--foreground)] flex">
       <SidebarNav onClose={() => {}} currentPath={pathname} />
 
-      {/* Floating local video preview when not in call */}
       {localStream && !currentCallId && (
         <div className="fixed bottom-4 right-4 w-48 h-36 bg-gray-800 rounded-lg overflow-hidden z-40 border-2 border-gray-300">
           <video
@@ -1126,7 +1188,6 @@ const Call: React.FC = () => {
         </div>
       )}
 
-      {/* Incoming Call Modal */}
       {incomingCall && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4">
@@ -1137,7 +1198,7 @@ const Call: React.FC = () => {
               </h2>
               <p className="text-gray-600 mb-6">
                 {incomingCall.callType || "Video"} call from{" "}
-                {incomingCall.callerId}
+                {getContactName(incomingCall.callerId, user?.id)}
               </p>
               <div className="flex space-x-4">
                 <button
@@ -1159,12 +1220,10 @@ const Call: React.FC = () => {
       )}
 
       <div className="flex flex-1 ml-20">
-        {/* Left Panel - Contacts */}
         <div className="w-96 flex flex-col bg-[var(--background)] text-[var(--foreground)]">
           <div className="p-4 border-b border-gray-100">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-2xl font-semibold">Contacts</h1>
-
               <div className="flex items-center space-x-2">
                 <div
                   className={`w-2 h-2 rounded-full ${
@@ -1185,15 +1244,17 @@ const Call: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search contacts"
+                placeholder="Search contacts or requests"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-gray-100 text-black border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
 
-            <div className="flex gap-2 mb-4">
-              {(["missed", "pending", "requests"] as const).map((tab) => (
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {(
+                ["all", "incoming", "missed", "pending", "requests", "friend-requests"] as const
+              ).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setCurrentTab(tab)}
@@ -1203,130 +1264,190 @@ const Call: React.FC = () => {
                       : "border border-blue-500 hover:bg-gray-100"
                   }`}
                 >
+                  {tab === "all" && "All Calls"}
+                  {tab === "incoming" && "Incoming"}
                   {tab === "missed" && "Missed"}
                   {tab === "pending" && "Pending"}
                   {tab === "requests" && "Requests"}
+                  {tab === "friend-requests" && "Friend Requests"}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Call History */}
-          <div className="border-b-[1px] border-gray-50">
-            {filteredCallHistory.length > 0 ? (
-              <div className="px-4 py-2">
-                {filteredCallHistory.slice(0, 4).map((call) => (
-                  <div
-                    key={call.id}
-                    className="flex items-center space-x-3 py-3 cursor-pointer hover:bg-gray-50 rounded-lg px-2"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-gray-500 flex items-center justify-center text-white font-semibold">
-                      {call.participantName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 text-sm truncate">
-                        {call.participantName}
-                      </h3>
-                      <div className="flex items-center space-x-1 text-xs text-gray-500">
-                        {call.status === "missed" && (
-                          <PhoneMissed className="w-3 h-3 text-red-500" />
-                        )}
-                        <span>
-                          {call.status === "missed" ? "Missed call" : "Call"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {formatCallTime(call.timestamp)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="px-4 py-8 text-center ">
-                <div className="text-2xl mb-2">📞</div>
-                <p className="text-sm">No {currentTab} calls</p>
-              </div>
-            )}
-          </div>
-
-          {/* Contacts List */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="px-4 py-4">
-              <h2 className="text-lg font-medium  mb-4">
-                All Contacts
-              </h2>
-
-              {filteredContacts.length > 0 ? (
-                <div className="space-y-2">
-                  {filteredContacts.map((contact) => {
-                    const contactName = getContactName(
-                      contact.contact_id,
-                      user?.id
-                    );
-
-                    return (
+          {currentTab === "friend-requests" ? (
+            <div className="flex-1 overflow-y-auto">
+              <div className="px-4 py-4">
+                <h2 className="text-lg font-medium mb-4">Friend Requests</h2>
+                {filteredFriendRequests.length > 0 ? (
+                  <div className="space-y-2">
+                    {filteredFriendRequests.map((request) => (
                       <div
-                        key={contact.contact_id}
-                        className="flex items-center space-x-3 py-3 hover:bg-gray-50 hover:dark:bg-black hover:cursor-pointer rounded-lg px-2"
+                        key={request.id}
+                        className="flex items-center space-x-3 py-3 hover:bg-gray-50 hover:dark:bg-black rounded-lg px-2"
                       >
                         <div className="w-12 h-12 rounded-full bg-gray-500 flex items-center justify-center text-white font-semibold">
-                          {contactName.charAt(0).toUpperCase()}
+                          {(request.sender_name || request.sender_id)
+                            .charAt(0)
+                            .toUpperCase()}
                         </div>
-
                         <div className="flex-1 min-w-0">
                           <h3 className="font-medium text-gray-900 dark:text-white text-sm truncate">
-                            {contactName}
+                            {request.sender_name || request.sender_id}
                           </h3>
+                          <p className="text-xs text-gray-500">
+                            {formatRequestTime(request.created_at)}
+                          </p>
                         </div>
-
                         <div className="flex items-center space-x-2">
                           <button
-                            onClick={() =>
-                              startDirectCall(contact.contact_id, "audio")
-                            }
+                            onClick={() => acceptFriendRequest(request.id)}
                             className="p-2 text-green-500 hover:bg-green-50 rounded-full transition-colors"
-                            title="Voice Call"
-                            disabled={!isConnected}
+                            title="Accept Friend Request"
                           >
-                            <Phone className="w-4 h-4" />
+                            <UserPlus className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() =>
-                              startDirectCall(contact.contact_id, "video")
-                            }
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors"
-                            title="Video Call"
-                            disabled={!isConnected}
+                            onClick={() => rejectFriendRequest(request.id)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                            title="Reject Friend Request"
                           >
-                            <Video className="w-4 h-4" />
+                            <UserMinus className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="text-2xl mb-2">👥</div>
-                  <p className="text-sm">No contacts found</p>
-                </div>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-2xl mb-2">👥</div>
+                    <p className="text-sm">No friend requests</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="border-b-[1px] border-gray-50">
+                {filteredCallHistory.length > 0 ? (
+                  <div className="px-4 py-2">
+                    {filteredCallHistory.slice(0, 4).map((call) => (
+                      <div
+                        key={call.id}
+                        className="flex items-center space-x-3 py-3 cursor-pointer hover:bg-gray-50 rounded-lg px-2"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-gray-500 flex items-center justify-center text-white font-semibold">
+                          {getContactName(call.participantId, user?.id)
+                            .charAt(0)
+                            .toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-gray-900 text-sm truncate">
+                            {getContactName(call.participantId, user?.id)}
+                          </h3>
+                          <div className="flex items-center space-x-1 text-xs text-gray-500">
+                            {call.status === "missed" && (
+                              <PhoneMissed className="w-3 h-3 text-red-500" />
+                            )}
+                            <span>
+                              {call.status === "missed"
+                                ? "Missed call"
+                                : `${
+                                    call.callType.charAt(0).toUpperCase() +
+                                    call.callType.slice(1)
+                                  } ${call.status}`}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {formatCallTime(call.timestamp.toISOString())}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-8 text-center">
+                    <div className="text-2xl mb-2">📞</div>
+                    <p className="text-sm">No {currentTab} calls</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                <div className="px-4 py-4">
+                  <h2 className="text-lg font-medium mb-4">All Contacts</h2>
+                  {filteredContacts.length > 0 ? (
+                    <div className="space-y-2">
+                      {filteredContacts.map((contact) => {
+                        const contactName = getContactName(
+                          contact.contact_id,
+                          user?.id
+                        );
+
+                        return (
+                          <div
+                            key={contact.contact_id}
+                            className="flex items-center space-x-3 py-3 hover:bg-gray-50 hover:dark:bg-black hover:cursor-pointer rounded-lg px-2"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-gray-500 flex items-center justify-center text-white font-semibold">
+                              {contactName.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium text-[var(--foreground)] capitalize text-sm truncate">
+                                {contactName}
+                              </h3>
+                              <p className="text-xs text-gray-500">
+                                {contact.phone_number || 'No phone number'}
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() =>
+                                  startDirectCall(contact.contact_id, "audio")
+                                }
+                                className="p-2 text-green-500 hover:bg-green-50 rounded-full transition-colors"
+                                title="Voice Call"
+                                disabled={!isConnected}
+                              >
+                                <Phone className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  startDirectCall(contact.contact_id, "video")
+                                }
+                                className="p-2 text-blue-500 hover:bg-blue-50 rounded-full transition-colors"
+                                title="Video Call"
+                                disabled={!isConnected}
+                              >
+                                <Video className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="text-2xl mb-2">👥</div>
+                      <p className="text-sm">No contacts found</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Right Panel - Debug */}
-        <div className="flex-1 flex flex-col ">
+        <div className="flex-1 flex flex-col">
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <p className=" mb-4">
-                Select a contact to start a call
+              <p className="mb-4">
+                {currentTab === "friend-requests"
+                  ? "Manage your friend requests"
+                  : "Select a contact to start a call"}
               </p>
-
             </div>
           </div>
-
         </div>
       </div>
     </div>

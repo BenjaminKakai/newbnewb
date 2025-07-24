@@ -1,4 +1,3 @@
-// providers/Providers.tsx
 "use client";
 
 import React, { useEffect } from "react";
@@ -7,13 +6,13 @@ import { ToastProvider } from "./ToastProvider";
 import { KycRouteGuard } from "@/features/auth/components/KycRouteGuard";
 import { NotificationProvider } from "@/features/calls/components/NotificationContext";
 import { ThemeProvider } from "./ThemeProvider";
-
+import { SocketProvider } from "@/services/notificationSocket";
 import { useTokenSync } from "@/hooks/useTokenSync";
 import { useAuthInit } from "@/store/authStore";
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
-  useAuthInit(); // Your existing auth initialization
-  useTokenSync(); // New token synchronization
+  useAuthInit();
+  useTokenSync();
 
   return <>{children}</>;
 }
@@ -37,9 +36,13 @@ export const Providers: React.FC<ProvidersProps> = ({ children }) => {
     <AuthProvider>
       <ThemeProvider>
         <ToastProvider>
-          <NotificationProvider>
-            <ContactsInitializer>{children}</ContactsInitializer>
-          </NotificationProvider>
+          <SocketProvider>
+            <NotificationProvider>
+              <ContactsInitializer>
+                <KycRouteGuard>{children}</KycRouteGuard>
+              </ContactsInitializer>
+            </NotificationProvider>
+          </SocketProvider>
         </ToastProvider>
       </ThemeProvider>
     </AuthProvider>

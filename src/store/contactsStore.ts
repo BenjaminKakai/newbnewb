@@ -1,199 +1,197 @@
-// store/contactsStore.ts
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
-import ContactService, { Contact } from '@/services/contactService';
+import { create } from "zustand";
+import { devtools } from "zustand/middleware";
+import { useAuthStore } from "./authStore";
 
-export interface ContactsState {
-  // State
-  contacts: Contact[];
-  contactsMap: Record<string, Contact>;
-  isLoading: boolean;
-  error: string | null;
-  hasAttemptedFetch: boolean;
-
-  // Actions
-  setContacts: (contacts: Contact[]) => void;
-  setContactsMap: (contactsMap: Record<string, Contact>) => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-  setHasAttemptedFetch: (attempted: boolean) => void;
-  
-  // Async actions
-  fetchContacts: (userId: string, accessToken: string) => Promise<void>;
-  
-  // Utility methods
-  findContactByUserId: (userId: string) => Contact | null;
-  findContactByPhone: (phoneNumber: string) => Contact | null;
-  getContactName: (userId: string, fallback?: string) => string;
-  clearContacts: () => void;
+interface Contact {
+  contact_id: string;
+  name: string;
+  avatar?: string;
 }
+
+interface FriendRequest {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: string;
+  created_at: string;
+  sender_name?: string;
+}
+
+interface ContactsState {
+  contacts: Contact[];
+  friendRequests: FriendRequest[];
+  isLoadingContacts: boolean;
+  isLoadingFriendRequests: boolean;
+  error: string | null;
+  setContacts: (contacts: Contact[]) => void;
+  setFriendRequests: (requests: FriendRequest[]) => void;
+  fetchContacts: () => Promise<void>;
+  fetchFriendRequests: () => Promise<void>;
+  acceptFriendRequest: (requestId: string) => Promise<void>;
+  rejectFriendRequest: (requestId: string) => Promise<void>;
+  getContactName: (contactId: string, userId?: string) => string;
+}
+
+const CONTACTS_API_BASE_URL = "http://138.68.190.213:3019/api/v1";
+const API_KEY = "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
 
 export const useContactsStore = create<ContactsState>()(
   devtools(
     (set, get) => ({
-      // Initial state
       contacts: [],
-      contactsMap: {},
-      isLoading: false,
+      friendRequests: [],
+      isLoadingContacts: false,
+      isLoadingFriendRequests: false,
       error: null,
-      hasAttemptedFetch: false,
 
-      // Basic setters
-      setContacts: (contacts) => {
-        set({ contacts });
-        
-        // Auto-generate contacts map when contacts are set
-        const contactsMap: Record<string, Contact> = {};
-        
-        contacts.forEach((contact) => {
-          // Map by all possible ID fields
-          if (contact.contact_id) contactsMap[contact.contact_id] = contact;
-          if (contact.user_id) contactsMap[contact.user_id] = contact;
-          if (contact.id) contactsMap[contact.id] = contact;
-          
-          // Map by phone number variants
-          if (contact.phone_number || contact.number) {
-            const phoneNumber = contact.phone_number || contact.number;
-            const variants = [
-              phoneNumber,
-              phoneNumber!.replace(/^\+/, ""),
-              phoneNumber!.startsWith("254")
-                ? `0${phoneNumber!.substring(3)}`
-                : null,
-            ].filter(Boolean);
+      setContacts: (contacts) => set({ contacts }),
+      setFriendRequests: (requests) => set({ friendRequests: requests }),
 
-            variants.forEach((variant) => {
-              if (variant) {
-                contactsMap[variant] = contact;
-              }
-            });
-          }
-
-          // Map nested contact properties
-          if (contact.contact) {
-            if (contact.contact.id) {
-              contactsMap[contact.contact.id] = contact;
-            }
-            if (contact.contact.phone_number) {
-              const variants = [
-                contact.contact.phone_number,
-                contact.contact.phone_number.replace(/^\+/, ""),
-                contact.contact.phone_number.startsWith("254")
-                  ? `0${contact.contact.phone_number.substring(3)}`
-                  : null,
-              ].filter(Boolean);
-
-              variants.forEach((variant) => {
-                if (variant) {
-                  contactsMap[variant] = contact;
-                }
-              });
-            }
-          }
-        });
-        
-        set({ contactsMap });
-      },
-
-      setContactsMap: (contactsMap) => set({ contactsMap }),
-      setLoading: (isLoading) => set({ isLoading }),
-      setError: (error) => set({ error }),
-      setHasAttemptedFetch: (hasAttemptedFetch) => set({ hasAttemptedFetch }),
-
-      // Async action to fetch contacts
-      fetchContacts: async (userId: string, accessToken: string) => {
-        const { hasAttemptedFetch, isLoading } = get();
-        
-        if (hasAttemptedFetch || isLoading) {
-          console.log('📇 Contacts already fetched or currently fetching');
-          return;
-        }
-
-        set({ isLoading: true, error: null, hasAttemptedFetch: true });
-
+      fetchContacts: async () => {
+        set({ isLoadingContacts: true, error: null });
         try {
-          console.log('📇 Fetching contacts for user:', userId);
-          const contactsList = await ContactService.fetchContacts(userId, accessToken);
-          console.log('📇 Received contacts:', contactsList.length);
-
-          if (!Array.isArray(contactsList)) {
-            throw new Error('Invalid contacts data format');
+          const { user, accessToken } = useAuthStore.getState();
+          if (!user?.id || !accessToken) {
+            throw new Error("No authentication data available");
           }
-
-          // Use setContacts which will auto-generate the map
-          get().setContacts(contactsList);
-          
-          console.log('📇 Contacts successfully stored in Zustand');
+          const response = await fetch(
+            `${CONTACTS_API_BASE_URL}/contacts/user/${user.id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "x-api-key": API_KEY,
+              },
+            }
+          );
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText || "Failed to fetch contacts"}`);
+          }
+          const data = await response.json();
+          const contacts: Contact[] = data.contacts || [];
+          set({ contacts, isLoadingContacts: false });
+          console.log(`✅ Fetched ${contacts.length} contacts`);
         } catch (error) {
-          console.error('Failed to fetch contacts:', error);
-          set({ 
-            error: error instanceof Error ? error.message : 'Failed to fetch contacts',
-            contacts: [],
-            contactsMap: {}
-          });
-        } finally {
-          set({ isLoading: false });
+          console.error("❌ Failed to fetch contacts:", error);
+          set({ isLoadingContacts: false, error: `Failed to fetch contacts: ${error}` });
         }
       },
+      
 
-      // Utility methods
-      findContactByUserId: (userId: string) => {
-        const { contactsMap } = get();
-        return contactsMap[userId] || null;
-      },
-
-      findContactByPhone: (phoneNumber: string) => {
-        const { contactsMap } = get();
-        
-        // Try exact match first
-        if (contactsMap[phoneNumber]) {
-          return contactsMap[phoneNumber];
-        }
-        
-        // Try phone number variants
-        const variants = [
-          phoneNumber.replace(/^\+/, ""),
-          phoneNumber.startsWith("254") ? `0${phoneNumber.substring(3)}` : null,
-          phoneNumber.startsWith("0") ? `254${phoneNumber.substring(1)}` : null,
-          phoneNumber.startsWith("0") ? `+254${phoneNumber.substring(1)}` : null,
-        ].filter(Boolean);
-
-        for (const variant of variants) {
-          if (variant && contactsMap[variant]) {
-            return contactsMap[variant];
+      fetchFriendRequests: async () => {
+        set({ isLoadingFriendRequests: true, error: null });
+        try {
+          const { user, accessToken } = useAuthStore.getState();
+          if (!user?.id || !accessToken) {
+            throw new Error("No authentication data available");
           }
+          const response = await fetch(
+            `${CONTACTS_API_BASE_URL}/friend-requests/by-receiver-id/${user.id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "x-api-key": API_KEY,
+              },
+            }
+          );
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
+          const friendRequests = Array.isArray(data.results)
+            ? data.results.map((req: any) => ({
+                id: req.id,
+                sender_id: req.sender_id,
+                receiver_id: req.receiver_id,
+                status: req.status,
+                created_at: req.createdAt,
+                sender_name: req.user_detail
+                  ? `${req.user_detail.first_name} ${req.user_detail.last_name}`.trim()
+                  : req.sender_id,
+              }))
+            : [];
+          set({ friendRequests, isLoadingFriendRequests: false });
+          console.log(`✅ Fetched ${friendRequests.length} friend requests`);
+        } catch (error) {
+          console.error("❌ Failed to fetch friend requests:", error);
+          set({
+            isLoadingFriendRequests: false,
+            error: `Failed to fetch friend requests: ${error}`,
+          });
         }
-        
-        return null;
       },
 
-      getContactName: (userId: string, fallback?: string) => {
-        const contact = get().findContactByUserId(userId);
-        
+      acceptFriendRequest: async (requestId: string) => {
+        try {
+          const { accessToken } = useAuthStore.getState();
+          if (!accessToken) {
+            throw new Error("No authentication data available");
+          }
+          const response = await fetch(
+            `${CONTACTS_API_BASE_URL}/friend-requests/${requestId}/accept`,
+            {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "x-api-key": API_KEY,
+              },
+            }
+          );
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          set((state) => ({
+            friendRequests: state.friendRequests.filter(
+              (req) => req.id !== requestId
+            ),
+          }));
+          await get().fetchContacts(); // Refresh contacts after accepting
+          console.log(`✅ Accepted friend request ${requestId}`);
+        } catch (error) {
+          console.error("❌ Failed to accept friend request:", error);
+          set({ error: `Failed to accept friend request: ${error}` });
+        }
+      },
+
+      rejectFriendRequest: async (requestId: string) => {
+        try {
+          const { accessToken } = useAuthStore.getState();
+          if (!accessToken) {
+            throw new Error("No authentication data available");
+          }
+          const response = await fetch(
+            `${CONTACTS_API_BASE_URL}/friend-requests/${requestId}/reject`,
+            {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "x-api-key": API_KEY,
+              },
+            }
+          );
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          set((state) => ({
+            friendRequests: state.friendRequests.filter(
+              (req) => req.id !== requestId
+            ),
+          }));
+          console.log(`✅ Rejected friend request ${requestId}`);
+        } catch (error) {
+          console.error("❌ Failed to reject friend request:", error);
+          set({ error: `Failed to reject friend request: ${error}` });
+        }
+      },
+
+      getContactName: (contactId: string, userId?: string) => {
+        const contact = get().contacts.find((c) => c.contact_id === contactId);
         if (contact) {
-          return contact.name || 
-                 contact.phone_number || 
-                 contact.number || 
-                 fallback || 
-                 'Unknown Contact';
+          return contact.name;
         }
-        
-        return fallback || 
-               (userId.length > 15 ? `Contact ${userId.substring(0, 8)}...` : userId);
-      },
-
-      clearContacts: () => {
-        set({
-          contacts: [],
-          contactsMap: {},
-          isLoading: false,
-          error: null,
-          hasAttemptedFetch: false,
-        });
+        return contactId === userId ? "You" : contactId;
       },
     }),
-    {
-      name: 'contacts-store',
-    }
+    { name: "ContactsStore" }
   )
 );

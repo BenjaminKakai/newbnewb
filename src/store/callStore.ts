@@ -1,4 +1,3 @@
-// src/store/callStore.ts
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useAuthStore } from "./authStore";
@@ -51,12 +50,12 @@ interface CallState {
   showAcceptButton: boolean;
   callHistory: CallHistory[];
   isLoadingHistory: boolean;
-  currentTab: "missed" | "pending" | "requests";
+  currentTab: "all" | "incoming" | "missed" | "pending" | "requests" | "friend-requests";
   showDialPad: boolean;
   showNewCallModal: boolean;
   isConnected: boolean;
   connectionError: string | null;
-  setCurrentTab: (tab: "missed" | "pending" | "requests") => void;
+  setCurrentTab: (tab: "all" | "incoming" | "missed" | "pending" | "requests" | "friend-requests") => void;
   setShowDialPad: (show: boolean) => void;
   setShowNewCallModal: (show: boolean) => void;
   initializeMedia: (callType: "voice" | "video") => Promise<MediaStream>;
@@ -99,7 +98,7 @@ export const useCallStore = create<CallState>()(
       showAcceptButton: false,
       callHistory: [],
       isLoadingHistory: false,
-      currentTab: "missed",
+      currentTab: "all",
       showDialPad: false,
       showNewCallModal: false,
       isConnected: false,
@@ -119,7 +118,6 @@ export const useCallStore = create<CallState>()(
           const stream = await navigator.mediaDevices.getUserMedia(constraints);
           console.log('✅ Media stream created:', stream.getTracks().map(t => ({ kind: t.kind, id: t.id, enabled: t.enabled, readyState: t.readyState })));
           
-          // CRITICAL FIX: Ensure both audio and video are enabled for video calls
           set({ 
             localStream: stream, 
             isMuted: false, 
@@ -232,7 +230,6 @@ export const useCallStore = create<CallState>()(
             callerId: user.id,
           });
           
-          // CRITICAL FIX: Both microphone and camera enabled for caller
           set({
             currentCall: {
               id: `temp-${Date.now()}`,
@@ -250,8 +247,8 @@ export const useCallStore = create<CallState>()(
               isGroupCall: false,
             },
             isInCall: true,
-            isMuted: false, // Microphone ON for caller
-            isVideoEnabled: callType === 'video', // Camera ON for video calls
+            isMuted: false,
+            isVideoEnabled: callType === 'video',
           });
           console.log(`✅ Call initiated to ${participantId} - Audio: ON, Video: ${callType === 'video' ? 'ON' : 'OFF'}`);
           return stream;
@@ -319,12 +316,11 @@ export const useCallStore = create<CallState>()(
           }
           callSocket.answerCall();
           
-          // CRITICAL FIX: Both microphone and camera enabled for callee
           set({ 
             showAcceptButton: false, 
             isInCall: true, 
-            isMuted: false, // Microphone ON for callee
-            isVideoEnabled: callType === 'video', // Camera ON for video calls
+            isMuted: false, 
+            isVideoEnabled: callType === 'video', 
             connectionError: null 
           });
           console.log(`✅ Call answered - Audio: ON, Video: ${callType === 'video' ? 'ON' : 'OFF'}`);
@@ -378,7 +374,7 @@ export const useCallStore = create<CallState>()(
           if (!accessToken || !user?.id) {
             throw new Error('No authentication data available');
           }
-          const response = await fetch(`${API_BASE_URL}/calls/history/${user.id}`, {
+          const response = await fetch(`${API_BASE_URL}/calls/user/${user.id}`, {
             headers: {
               'Authorization': `Bearer ${accessToken}`,
               'x-api-key': API_KEY,
@@ -391,29 +387,22 @@ export const useCallStore = create<CallState>()(
           }
           const data = await response.json();
           console.log('📜 Call history response:', JSON.stringify(data, null, 2));
-          let calls: unknown[] = [];
-          if (Array.isArray(data)) {
-            calls = data;
-          } else if (data && Array.isArray(data.calls)) {
-            calls = data.calls;
-          } else {
-            console.warn('⚠️ Unexpected response format:', data);
-            calls = [];
-          }
           
-          // CRITICAL FIX: Proper type assertion for map function
+          // Handle nested data structure
+          const calls = data.data?.calls || [];
+          
           const callHistory: CallHistory[] = calls
             .filter((call): call is Record<string, unknown> => 
               typeof call === 'object' && call !== null
             )
             .map((call) => ({
               id: (call.id as string) || `temp-${Date.now()}`,
-              participantId: (call.participant_id as string) || (call.participantId as string) || 'unknown',
-              participantName: (call.participant_name as string) || (call.participantName as string) || 'Unknown',
-              participantAvatar: (call.participant_avatar as string) || (call.participantAvatar as string),
-              type: (call.type as "incoming" | "outgoing" | "missed") || 'missed',
-              callType: (call.call_type as "voice" | "video") || (call.callType as "voice" | "video") || 'voice',
-              timestamp: new Date((call.timestamp as string) || (call.created_at as string) || Date.now()),
+              participantId: (call.otherPartyId as string) || 'unknown',
+              participantName: (call.otherPartyName as string) || 'Unknown',
+              participantAvatar: undefined,
+              type: (call.direction as "incoming" | "outgoing" | "missed") || 'missed',
+              callType: (call.type as "voice" | "video") || 'voice',
+              timestamp: new Date((call.initiatedAt as string) || Date.now()),
               duration: (call.duration as number) || 0,
               status: (call.status as "completed" | "missed" | "failed") || 'missed',
             }));
