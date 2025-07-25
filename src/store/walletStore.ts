@@ -1,4 +1,3 @@
-// store/walletStore.ts
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
@@ -18,7 +17,6 @@ export interface WalletSummary {
     withdrawalEnabled: boolean;
     maxPerTransaction: number;
   };
-  // New fields from API response
   lockedBalance?: number;
   debit?: number;
   credit?: number;
@@ -37,7 +35,6 @@ export interface WalletSummary {
   updatedAt?: string;
 }
 
-// Define specific metadata interface
 export interface TransactionMetadata {
   balance?: number;
   runningBalance?: number;
@@ -52,7 +49,7 @@ export interface TransactionMetadata {
   merchantName?: string;
   debit?: string;
   credit?: string;
-  [key: string]: unknown; // Allow additional properties
+  [key: string]: unknown;
 }
 
 export interface Transaction {
@@ -74,8 +71,8 @@ export interface Transaction {
 }
 
 export interface PaymentRequest {
-  recipientId: string; // User ID
-  recipientWalletId?: string; // Wallet ID (will be fetched if not provided)
+  recipientId: string;
+  recipientWalletId?: string;
   amount: number;
   currency: string;
   description?: string;
@@ -116,7 +113,6 @@ export interface UserWallet {
   updatedAt: string;
 }
 
-// Define pagination interface
 export interface PaginationInfo {
   page: number;
   limit: number;
@@ -124,7 +120,6 @@ export interface PaginationInfo {
   totalPages: number;
 }
 
-// Define API transaction response interface
 export interface ApiTransactionResponse {
   id?: string;
   uuid?: string;
@@ -170,16 +165,11 @@ export interface ApiTransactionResponse {
 }
 
 interface WalletState {
-  // Wallet info
   walletId: string | null;
   summary: WalletSummary | null;
-
-  // Transactions
   transactions: Transaction[];
   pendingTransactions: Transaction[];
   transactionsPagination: PaginationInfo | null;
-
-  // Transaction filters
   transactionFilters: {
     status?: Transaction["status"];
     minAmount?: number;
@@ -188,22 +178,14 @@ interface WalletState {
     endDate?: string;
     type?: "debit" | "credit" | "all";
   };
-
-  // Bank accounts
   bankAccounts: BankAccount[];
-
-  // Cached user wallets
   userWallets: Map<string, UserWallet>;
-
-  // UI state
   isLoading: boolean;
   isLoadingTransactions: boolean;
   isLoadingSummary: boolean;
   isSending: boolean;
   isLoadingUserWallet: boolean;
   error: string | null;
-
-  // Payment state
   lastPaymentResult: {
     success: boolean;
     transactionId?: string;
@@ -212,88 +194,57 @@ interface WalletState {
 }
 
 interface WalletActions {
-  // Wallet summary actions
   setWalletSummary: (summary: WalletSummary) => void;
   updateBalance: (balance: number) => void;
-
-  // Transaction actions
   setTransactions: (transactions: Transaction[], pagination?: PaginationInfo) => void;
   addTransaction: (transaction: Transaction) => void;
-  updateTransaction: (
-    transactionId: string,
-    updates: Partial<Transaction>
-  ) => void;
+  updateTransaction: (transactionId: string, updates: Partial<Transaction>) => void;
   setPendingTransactions: (transactions: Transaction[]) => void;
-
-  // Transaction filtering
-  setTransactionFilters: (
-    filters: Partial<WalletState["transactionFilters"]>
-  ) => void;
+  setTransactionFilters: (filters: Partial<WalletState["transactionFilters"]>) => void;
   clearTransactionFilters: () => void;
-
-  // Bank account actions
   setBankAccounts: (accounts: BankAccount[]) => void;
   addBankAccount: (account: BankAccount) => void;
   updateBankAccount: (accountId: string, updates: Partial<BankAccount>) => void;
   removeBankAccount: (accountId: string) => void;
   setDefaultBankAccount: (accountId: string) => void;
-
-  // User wallet actions
   setUserWallet: (userId: string, wallet: UserWallet) => void;
   getUserWallet: (userId: string) => Promise<UserWallet | null>;
-
-  // Loading states
   setLoading: (loading: boolean) => void;
   setLoadingTransactions: (loading: boolean) => void;
   setLoadingSummary: (loading: boolean) => void;
   setSending: (sending: boolean) => void;
   setLoadingUserWallet: (loading: boolean) => void;
   setError: (error: string | null) => void;
-
-  // Payment actions
   sendPayment: (request: PaymentRequest) => Promise<boolean>;
   depositMoney: (amount: number, phone: string) => Promise<boolean>;
   withdrawMoney: (amount: number, account: string) => Promise<boolean>;
   requestPayment: (request: PaymentRequest) => Promise<boolean>;
   setLastPaymentResult: (result: WalletState["lastPaymentResult"]) => void;
   clearLastPaymentResult: () => void;
-
-  // Utility actions
   refreshWallet: () => Promise<void>;
-  refreshTransactions: (
-    page?: number,
-    additionalFilters?: Partial<TransactionFilterParams>
-  ) => Promise<void>;
+  refreshTransactions: (page?: number, additionalFilters?: Partial<TransactionFilterParams>) => Promise<void>;
   loadMoreTransactions: () => Promise<void>;
   getTransactionById: (id: string) => Transaction | undefined;
   getTransactionsByType: (type: Transaction["type"]) => Transaction[];
   getTransactionsByStatus: (status: Transaction["status"]) => Transaction[];
   calculateTotalSent: (timeframe?: "day" | "week" | "month") => number;
   calculateTotalReceived: (timeframe?: "day" | "week" | "month") => number;
-
-  // Reset actions
   reset: () => void;
 }
 
 export type WalletStore = WalletState & WalletActions;
 
-// API Configuration
-const API_BASE_URL = "http://138.68.190.213:3030/api";
-const WALLET_SERVICE = "http://138.68.190.213:3030/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_WALLET_API_BASE_URL;
 
-// Helper function to get auth headers
 const getAuthHeaders = () => {
   const token = localStorage.getItem("access_token");
   return {
     "Content-Type": "application/json",
-    "x-api-key":
-      process.env.NEXT_PUBLIC_API_KEY ||
-      "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==",
+    "x-api-key": process.env.NEXT_PUBLIC_API_KEY,
     ...(token && { Authorization: `Bearer ${token}` }),
   };
 };
 
-// Transaction filter interface for API
 export interface TransactionFilterParams {
   userWalletId: string;
   minDebit?: number;
@@ -307,13 +258,10 @@ export interface TransactionFilterParams {
   limit?: number;
 }
 
-// API functions
 const walletAPI = {
-  // Fetch current user's wallet summary
   fetchWalletSummary: async (): Promise<WalletSummary> => {
     try {
       console.log('🏦 Fetching wallet summary...');
-      
       const response = await fetch(`${API_BASE_URL}/wallets/me`, {
         method: "GET",
         headers: getAuthHeaders(),
@@ -366,12 +314,10 @@ const walletAPI = {
     }
   },
 
-  // NEW: Fetch user wallet by user ID
   fetchUserWallet: async (userId: string): Promise<UserWallet> => {
     try {
       console.log(`🔍 Fetching wallet for user: ${userId}`);
-      
-      const response = await fetch(`${WALLET_SERVICE}/wallets/user/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/wallets/user/${userId}`, {
         method: "GET",
         headers: getAuthHeaders(),
       });
@@ -387,7 +333,6 @@ const walletAPI = {
       const data = await response.json();
       console.log('✅ User wallet API Success:', data);
 
-      // Handle the actual response structure
       if (!data.status || !data.wallet) {
         throw new Error(data.message || "Invalid wallet response");
       }
@@ -395,7 +340,7 @@ const walletAPI = {
       const walletData = data.wallet;
 
       return {
-        id: walletData.id, // This is the wallet ID we need for transfers
+        id: walletData.id,
         userId: walletData.user_uuid || userId,
         balance: parseFloat(walletData.availableBalance || "0") + parseFloat(walletData.lockedBalance || "0"),
         currency: walletData.currency?.code || walletData.currency?.symbol || "KES",
@@ -417,7 +362,6 @@ const walletAPI = {
     }
   },
 
-  // Fetch transactions with pagination
   fetchTransactions: async (
     walletId: string,
     page: number = 1,
@@ -425,9 +369,8 @@ const walletAPI = {
   ): Promise<{ transactions: Transaction[]; pagination: PaginationInfo }> => {
     try {
       console.log('📊 Fetching transactions...');
-      
       const response = await fetch(
-        `${API_BASE_URL}/transactions/me`, 
+        `${API_BASE_URL}/transactions/me`,
         {
           method: "GET",
           headers: getAuthHeaders(),
@@ -493,8 +436,8 @@ const walletAPI = {
             type,
             amount,
             currency:
-              (typeof transaction.currency === 'object' 
-                ? transaction.currency?.code || transaction.currency?.symbol 
+              (typeof transaction.currency === 'object'
+                ? transaction.currency?.code || transaction.currency?.symbol
                 : transaction.currency) || "KES",
             status: (
               transaction.status || "COMPLETED"
@@ -558,21 +501,18 @@ const walletAPI = {
     }
   },
 
-  // Send payment with user wallet lookup
   sendPayment: async (
     request: PaymentRequest,
     senderWalletId: string
   ): Promise<{ success: boolean; transactionId?: string; error?: string }> => {
     try {
       console.log('💸 Sending payment request:', request);
-      
-      // If recipientWalletId is not provided, fetch it using userId
       let receiverWalletId = request.recipientWalletId;
-      
+
       if (!receiverWalletId) {
         console.log('🔍 Looking up recipient wallet...');
         const recipientWallet = await walletAPI.fetchUserWallet(request.recipientId);
-        receiverWalletId = recipientWallet.id; // ✅ Fixed: Use .id directly, not .wallet.id
+        receiverWalletId = recipientWallet.id;
         console.log('✅ Found recipient wallet:', receiverWalletId);
       }
 
@@ -583,8 +523,7 @@ const walletAPI = {
       };
 
       console.log('🚀 Transfer payload:', transferPayload);
-      
-      const response = await fetch(`${WALLET_SERVICE}/wallets/transfer`, {
+      const response = await fetch(`${API_BASE_URL}/wallets/transfer`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(transferPayload),
@@ -614,7 +553,6 @@ const walletAPI = {
     }
   },
 
-  // Deposit money to wallet
   depositToWallet: async (
     amount: number,
     paymentMethodUuid: string = "2",
@@ -623,8 +561,7 @@ const walletAPI = {
   ) => {
     try {
       console.log('💰 Deposit request:', { amount, paymentMethodUuid, phone, walletId });
-      
-      const response = await fetch(`${WALLET_SERVICE}/wallets/topup`, {
+      const response = await fetch(`${API_BASE_URL}/wallets/topup`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -653,7 +590,6 @@ const walletAPI = {
     }
   },
 
-  // Withdraw money from wallet
   withdrawFromWallet: async (
     amount: number,
     account: string,
@@ -663,8 +599,7 @@ const walletAPI = {
   ) => {
     try {
       console.log('💸 Withdrawal request:', { amount, account, walletId, bankUuid });
-      
-      const response = await fetch(`${WALLET_SERVICE}/wallets/withdraw`, {
+      const response = await fetch(`${API_BASE_URL}/wallets/withdraw`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -696,12 +631,10 @@ const walletAPI = {
   },
 };
 
-// Store implementation
 export const useWalletStore = create<WalletStore>()(
   devtools(
     persist(
       immer<WalletStore>((set, get) => ({
-        // Initial state
         walletId: null,
         summary: null,
         transactions: [],
@@ -718,7 +651,6 @@ export const useWalletStore = create<WalletStore>()(
         error: null,
         lastPaymentResult: null,
 
-        // Wallet summary actions
         setWalletSummary: (summary) =>
           set((state) => {
             state.summary = summary;
@@ -733,7 +665,6 @@ export const useWalletStore = create<WalletStore>()(
             }
           }),
 
-        // Transaction actions
         setTransactions: (transactions, pagination) =>
           set((state) => {
             state.transactions = transactions.sort(
@@ -757,7 +688,6 @@ export const useWalletStore = create<WalletStore>()(
               state.transactions.unshift(transaction);
             }
 
-            // Update wallet balance if transaction is completed
             if (transaction.status === "COMPLETED" && state.summary) {
               if (
                 transaction.type === "RECEIVE" ||
@@ -807,7 +737,6 @@ export const useWalletStore = create<WalletStore>()(
             state.pendingTransactions = transactions;
           }),
 
-        // Transaction filtering
         setTransactionFilters: (filters) =>
           set((state) => {
             state.transactionFilters = {
@@ -821,7 +750,6 @@ export const useWalletStore = create<WalletStore>()(
             state.transactionFilters = {};
           }),
 
-        // Bank account actions
         setBankAccounts: (accounts) =>
           set((state) => {
             state.bankAccounts = accounts;
@@ -863,7 +791,6 @@ export const useWalletStore = create<WalletStore>()(
             });
           }),
 
-        // User wallet actions
         setUserWallet: (userId, wallet) =>
           set((state) => {
             state.userWallets.set(userId, wallet);
@@ -872,7 +799,6 @@ export const useWalletStore = create<WalletStore>()(
         getUserWallet: async (userId: string) => {
           const { setLoadingUserWallet, setUserWallet, userWallets } = get();
 
-          // Check cache first
           const cachedWallet = userWallets.get(userId);
           if (cachedWallet) {
             console.log('💾 Using cached wallet for user:', userId);
@@ -892,7 +818,6 @@ export const useWalletStore = create<WalletStore>()(
           }
         },
 
-        // Loading states
         setLoading: (loading) =>
           set((state) => {
             state.isLoading = loading;
@@ -923,7 +848,6 @@ export const useWalletStore = create<WalletStore>()(
             state.error = error;
           }),
 
-        // Payment actions
         sendPayment: async (request) => {
           const { setSending, addTransaction, setLastPaymentResult, setError, summary } = get();
 
@@ -979,7 +903,6 @@ export const useWalletStore = create<WalletStore>()(
           }
         },
 
-        // Deposit money action
         depositMoney: async (amount: number, phone: string) => {
           const { setLoading, addTransaction, setError, summary, refreshWallet } = get();
 
@@ -993,7 +916,6 @@ export const useWalletStore = create<WalletStore>()(
             }
 
             console.log('💰 Initiating deposit:', { amount, phone, walletId });
-            
             const result = await walletAPI.depositToWallet(amount, "2", phone, walletId);
 
             const transaction: Transaction = {
@@ -1008,7 +930,6 @@ export const useWalletStore = create<WalletStore>()(
             };
 
             addTransaction(transaction);
-            
             setTimeout(() => {
               refreshWallet();
             }, 2000);
@@ -1024,7 +945,6 @@ export const useWalletStore = create<WalletStore>()(
           }
         },
 
-        // Withdraw money action
         withdrawMoney: async (amount: number, account: string) => {
           const { setLoading, addTransaction, setError, summary, refreshWallet } = get();
 
@@ -1038,7 +958,6 @@ export const useWalletStore = create<WalletStore>()(
             }
 
             console.log('💸 Initiating withdrawal:', { amount, account, walletId });
-            
             const result = await walletAPI.withdrawFromWallet(amount, account, walletId);
 
             const transaction: Transaction = {
@@ -1053,7 +972,6 @@ export const useWalletStore = create<WalletStore>()(
             };
 
             addTransaction(transaction);
-            
             setTimeout(() => {
               refreshWallet();
             }, 2000);
@@ -1084,7 +1002,6 @@ export const useWalletStore = create<WalletStore>()(
             state.lastPaymentResult = null;
           }),
 
-        // Utility actions
         refreshWallet: async () => {
           const { setLoadingSummary, setWalletSummary, setError } = get();
 
@@ -1261,7 +1178,6 @@ export const useWalletStore = create<WalletStore>()(
             .reduce((total, t) => total + t.amount, 0);
         },
 
-        // Reset actions
         reset: () =>
           set((state) => {
             state.walletId = null;
@@ -1290,7 +1206,6 @@ export const useWalletStore = create<WalletStore>()(
           transactionsPagination: state.transactionsPagination,
           transactionFilters: state.transactionFilters,
           bankAccounts: state.bankAccounts,
-          // Note: userWallets Map won't be persisted due to serialization
         }),
       }
     ),

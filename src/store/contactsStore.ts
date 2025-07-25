@@ -1,3 +1,4 @@
+
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useAuthStore } from "./authStore";
@@ -5,7 +6,7 @@ import { useAuthStore } from "./authStore";
 interface Contact {
   contact_id: string;
   name: string;
-  avatar?: string;
+  avatar?: string; 
 }
 
 interface FriendRequest {
@@ -30,10 +31,11 @@ interface ContactsState {
   acceptFriendRequest: (requestId: string) => Promise<void>;
   rejectFriendRequest: (requestId: string) => Promise<void>;
   getContactName: (contactId: string, userId?: string) => string;
+  getContactAvatar: (contactId: string) => string | undefined; // Added to retrieve avatar
 }
 
-const CONTACTS_API_BASE_URL = "http://138.68.190.213:3019/api/v1";
-const API_KEY = "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
+const CONTACTS_API_BASE_URL = process.env.NEXT_PUBLIC_CONTACTS_API_BASE_URL;
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
 export const useContactsStore = create<ContactsState>()(
   devtools(
@@ -68,7 +70,11 @@ export const useContactsStore = create<ContactsState>()(
             throw new Error(`HTTP ${response.status}: ${errorText || "Failed to fetch contacts"}`);
           }
           const data = await response.json();
-          const contacts: Contact[] = data.contacts || [];
+          const contacts: Contact[] = (data.contacts || []).map((contact: any) => ({
+            contact_id: contact.contact_id,
+            name: contact.name || contact.user_details?.first_name || contact.contact_id,
+            avatar: contact.user_details?.profile_picture, // Map profile_picture to avatar
+          }));
           set({ contacts, isLoadingContacts: false });
           console.log(`✅ Fetched ${contacts.length} contacts`);
         } catch (error) {
@@ -76,7 +82,6 @@ export const useContactsStore = create<ContactsState>()(
           set({ isLoadingContacts: false, error: `Failed to fetch contacts: ${error}` });
         }
       },
-      
 
       fetchFriendRequests: async () => {
         set({ isLoadingFriendRequests: true, error: null });
@@ -190,6 +195,11 @@ export const useContactsStore = create<ContactsState>()(
           return contact.name;
         }
         return contactId === userId ? "You" : contactId;
+      },
+
+      getContactAvatar: (contactId: string) => {
+        const contact = get().contacts.find((c) => c.contact_id === contactId);
+        return contact?.avatar;
       },
     }),
     { name: "ContactsStore" }

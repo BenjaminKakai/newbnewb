@@ -36,6 +36,9 @@ export interface QRAuthResponse {
   };
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_USER_API_BASE_URL;
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+
 export interface QRCodeService {
   connect: (qrCode: string) => Promise<void>;
   disconnect: () => void;
@@ -48,10 +51,8 @@ export interface QRCodeService {
 // Enhanced qrCodeSocketService.ts with detailed debugging
 class QRCodeSocketService implements QRCodeService {
   private socket: Socket | null = null;
-  private readonly socketUrl = "http://138.68.190.213:3010";
-  private readonly apiKey =
-    process.env.NEXT_PUBLIC_API_KEY ||
-    "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
+  private readonly socketUrl = API_BASE_URL;
+  private readonly apiKey = API_KEY;
   private authSuccessCallback: ((data: QRAuthResponse) => void) | null = null;
   private errorCallback: ((error: string) => void) | null = null;
   private disconnectCallback: (() => void) | null = null;
@@ -205,11 +206,11 @@ class QRCodeSocketService implements QRCodeService {
     if (typeof error === "string") {
       return error;
     }
-    
+
     if (error && typeof error === "object") {
       return error.message || "Unknown socket error";
     }
-    
+
     return "Unknown socket error";
   }
 

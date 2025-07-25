@@ -21,7 +21,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { useChatStore } from "@/store/chatStore";
 import { useCallStore } from "@/store/callStore";
-import { useCallSocket } from "@/store/callSocket";
+import { useCallSocket } from "@/services/callSocket";
 import { io, Socket } from "socket.io-client";
 import { useNotification } from "./NotificationContext";
 import SidebarNav from "@/components/SidebarNav";

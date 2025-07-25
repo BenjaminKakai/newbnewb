@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useLayoutEffect } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 interface ThemeContextType {
   isDarkMode: boolean;
@@ -10,18 +10,25 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== "undefined") {
-      const savedTheme = localStorage.getItem("theme");
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      return savedTheme === "dark" || (!savedTheme && prefersDark);
-    }
-    return false; // Default to light theme on server
-  });
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
-  useLayoutEffect(() => {
-    applyTheme(isDarkMode);
-  }, [isDarkMode]);
+  useEffect(() => {
+    setIsMounted(true);
+    // Initialize theme from localStorage or system preference
+    const savedTheme = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initialTheme = savedTheme === "dark" || (!savedTheme && prefersDark);
+    
+    setIsDarkMode(initialTheme);
+    applyTheme(initialTheme);
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      applyTheme(isDarkMode);
+    }
+  }, [isDarkMode, isMounted]);
 
   const applyTheme = (isDark: boolean) => {
     document.documentElement.style.setProperty(
@@ -36,43 +43,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const toggleTheme = () => {
-    setIsDarkMode((prev) => {
-      const newTheme = !prev;
-      localStorage.setItem("theme", newTheme ? "dark" : "light");
-      return newTheme;
-    });
+    const newTheme = !isDarkMode;
+    setIsDarkMode(newTheme);
+    localStorage.setItem("theme", newTheme ? "dark" : "light");
   };
 
-  // Apply theme immediately on initial client-side render
-  if (typeof window !== "undefined") {
-    applyTheme(isDarkMode);
-  }
-
   return (
-    <>
-      {/* Inline script to apply theme from localStorage before render */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (function() {
-              try {
-                const theme = localStorage.getItem('theme');
-                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                const isDark = theme === 'dark' || (!theme && prefersDark);
-                document.documentElement.classList.toggle('dark', isDark);
-                document.documentElement.style.setProperty('--background', isDark ? '#292929' : '#ffffff');
-                document.documentElement.style.setProperty('--foreground', isDark ? '#ededed' : '#171717');
-              } catch (e) {
-                console.error('Failed to apply theme from localStorage:', e);
-              }
-            })();
-          `,
-        }}
-      />
-      <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
-        {children}
-      </ThemeContext.Provider>
-    </>
+    <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
   );
 };
 

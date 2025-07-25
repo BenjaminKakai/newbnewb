@@ -148,9 +148,9 @@ const UserInfo: React.FC<UserInfoProps> = ({
       />
       
       {/* Sliding Panel */}
-      <div className="fixed top-0 right-0 h-full w-80 bg-[var(--background)] text-[var(--foreground)] shadow-xl z-50 transform transition-transform duration-300 ease-in-out">
+      <div className="fixed top-0 right-0 h-full w-80 bg-[var(--background)] text-[var(--foreground)] rounded-lg z-50 transform transition-transform duration-300 ease-in-out">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-4 border-b border-gray-50 ">
           <h2 className="text-lg font-semibold text-[var(--foreground)]">
             {isGroupChat ? "Group Info" : "Contact Info"}
           </h2>
@@ -165,7 +165,7 @@ const UserInfo: React.FC<UserInfoProps> = ({
         {/* Content */}
         <div className="overflow-y-auto h-full pb-20">
           {/* Profile Section */}
-          <div className="p-6 text-center border-b border-gray-50 dark:border-gray-700">
+          <div className="p-6 text-center border-b border-gray-50 ">
             <div className="relative inline-block mb-4">
               <img
                 src={conversation.avatar || getDummyAvatar(conversation.jid)}

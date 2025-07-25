@@ -2,7 +2,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useCallStore } from '@/store/callStore';
 import { useAuthStore } from '@/store/authStore';
-import { callSocket } from '@/store/callSocket';
+import { callSocket } from '@/services/callSocket';
 
 interface UseCallOptions {
   autoConnect?: boolean;

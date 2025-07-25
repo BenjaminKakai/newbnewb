@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -18,10 +19,9 @@ import UserInfo from "./components/UserInfo";
 import SidebarNav from "@/components/SidebarNav";
 import { useTheme } from "@/providers/ThemeProvider";
 
-// Constants
-const API_HOST = "http://xmpp-dev.wasaachat.com:8080/api/v1";
-const BOSH_SERVICE = "http://xmpp-dev.wasaachat.com:5280/bosh";
-const DOMAIN = "xmpp-dev.wasaachat.com";
+const API_HOST = process.env.NEXT_PUBLIC_XMPP_API_HOST;
+const BOSH_SERVICE = process.env.NEXT_PUBLIC_XMPP_BOSH_SERVICE;
+const DOMAIN = process.env.NEXT_PUBLIC_XMPP_DOMAIN;
 
 // Utility Functions
 const getAvatarColor = () => "bg-gray-500";
@@ -115,6 +115,21 @@ const ChatPage: React.FC = () => {
   const connectionAttemptRef = useRef<boolean>(false);
   const mamHandlerRef = useRef<string | null>(null);
 
+  // Validate environment variables
+  useEffect(() => {
+    if (!API_HOST || !BOSH_SERVICE || !DOMAIN) {
+      setConnectionError(
+        "Missing XMPP configuration. Please contact support."
+      );
+      setLoading(false);
+      console.error("Missing environment variables:", {
+        API_HOST,
+        BOSH_SERVICE,
+        DOMAIN,
+      });
+    }
+  }, []);
+
   // Authentication check
   useEffect(() => {
     const checkAuthStatus = () => {
@@ -129,7 +144,7 @@ const ChatPage: React.FC = () => {
   }, [isAuthenticated, user, router]);
 
   const getCurrentUser = (): User | null => {
-    if (!user?.id) return null;
+    if (!user?.id || !DOMAIN) return null;
     return {
       id: user.id,
       jid: `${user.id}@${DOMAIN}`,
@@ -138,19 +153,44 @@ const ChatPage: React.FC = () => {
 
   const currentUser = getCurrentUser();
 
-  // Load read conversations from localStorage
+  // Load conversations and read state from localStorage
   useEffect(() => {
     if (currentUser?.id) {
+      // Load read conversations
       const savedReadConversations = localStorage.getItem(
         `readConversations_${currentUser.id}`
       );
       if (savedReadConversations) {
         setReadConversations(new Set(JSON.parse(savedReadConversations)));
       }
+
+      // Load cached conversations
+      const savedConversations = localStorage.getItem(
+        `conversations_${currentUser.id}`
+      );
+      if (savedConversations) {
+        const parsed = JSON.parse(savedConversations);
+        const conversationsWithDates = parsed.map((conv: Conversation) => ({
+          ...conv,
+          lastMessageTime: new Date(conv.lastMessageTime),
+        }));
+        setConversations(conversationsWithDates);
+        setLoadingConversations(false);
+      } else {
+        fetchExistingConversations();
+      }
     }
   }, [currentUser?.id]);
 
-  console.log("Token:", accessToken);
+  // Save conversations to localStorage whenever they change
+  useEffect(() => {
+    if (currentUser?.id && conversations.length > 0) {
+      localStorage.setItem(
+        `conversations_${currentUser.id}`,
+        JSON.stringify(conversations)
+      );
+    }
+  }, [conversations, currentUser?.id]);
 
   const saveReadConversations = (readSet: Set<string>) => {
     if (currentUser?.id) {
@@ -205,6 +245,8 @@ const ChatPage: React.FC = () => {
 
   // Initialize XMPP connection and global MAM handler
   useEffect(() => {
+    if (!BOSH_SERVICE) return;
+
     connectionRef.current = new Strophe.Connection(BOSH_SERVICE);
     connectionRef.current.xmlInput = (body: any) => console.log("RECV:", body);
     connectionRef.current.xmlOutput = (body: any) => console.log("SEND:", body);
@@ -286,7 +328,9 @@ const ChatPage: React.FC = () => {
       isAuthenticated &&
       currentUser &&
       !connectionAttemptRef.current &&
-      connectionAttempts < maxConnectionAttempts
+      connectionAttempts < maxConnectionAttempts &&
+      BOSH_SERVICE &&
+      DOMAIN
     ) {
       connectionAttemptRef.current = true;
       connectToXMPP();
@@ -340,7 +384,10 @@ const ChatPage: React.FC = () => {
         null,
         null
       );
-      fetchExistingConversations();
+      // Only fetch if no cached conversations
+      if (conversations.length === 0) {
+        fetchExistingConversations();
+      }
     }
   };
 
@@ -386,6 +433,7 @@ const ChatPage: React.FC = () => {
       const isRead = readConversations.has(jid);
       const userId = jid.split("@")[0];
 
+      let updatedConversations: Conversation[];
       if (existingIndex >= 0) {
         const updated = [...prev];
         const currentUnread = updated[existingIndex].unreadCount;
@@ -400,7 +448,7 @@ const ChatPage: React.FC = () => {
             : currentUnread,
           name: getContactName(userId, currentUser?.id),
         };
-        return updated.sort(
+        updatedConversations = updated.sort(
           (a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
         );
       } else {
@@ -412,8 +460,20 @@ const ChatPage: React.FC = () => {
           unreadCount: isRead ? 0 : incrementUnread ? 1 : 0,
           type: "CHAT",
         };
-        return [newConv, ...prev];
+        updatedConversations = [newConv, ...prev].sort(
+          (a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
+        );
       }
+
+      // Save to localStorage
+      if (currentUser?.id) {
+        localStorage.setItem(
+          `conversations_${currentUser.id}`,
+          JSON.stringify(updatedConversations)
+        );
+      }
+
+      return updatedConversations;
     });
   };
 
@@ -430,7 +490,7 @@ const ChatPage: React.FC = () => {
     setConnectionError(null);
 
     const username = currentUser.id;
-    const password = currentUser.id; 
+    const password = currentUser.id;
 
     console.log(`Connecting as: ${currentUser.jid}`);
     connectionRef.current.connect(currentUser.jid, password, onConnect);
@@ -444,7 +504,7 @@ const ChatPage: React.FC = () => {
   };
 
   const fetchExistingConversations = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !API_HOST) return;
 
     setLoadingConversations(true);
     console.log("Fetching existing conversations...");
@@ -469,8 +529,10 @@ const ChatPage: React.FC = () => {
   };
 
   const fetchConversationsFromAPI = async () => {
+    if (!API_HOST || !currentUser) return;
+
     try {
-      const response = await axios.get(`${API_HOST}/users/${currentUser?.id}`, {
+      const response = await axios.get(`${API_HOST}/users/${currentUser.id}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -520,7 +582,7 @@ const ChatPage: React.FC = () => {
                       name: getContactName(userId, currentUser?.id),
                       avatar: msg.avatar,
                       phoneNumber: msg.phone_number,
-                      lastSeen: msg.last_seen,
+                      lastSeen: m.last_seen,
                     },
                   ],
             };
@@ -551,14 +613,25 @@ const ChatPage: React.FC = () => {
             }
           });
 
-          return Array.from(existingMap.values()).sort(
+          const updatedConversations = Array.from(existingMap.values()).sort(
             (a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
           );
+
+          // Save to localStorage
+          if (currentUser?.id) {
+            localStorage.setItem(
+              `conversations_${currentUser.id}`,
+              JSON.stringify(updatedConversations)
+            );
+          }
+
+          return updatedConversations;
         });
 
         const apiMessages: Message[] = messages.map((msg: any) => {
           let from = msg.bare_peer;
           let to = currentUser?.jid || "";
+
           const isOwn = msg.xml.includes(`from='${currentUser?.jid}`);
 
           if (isOwn) {
@@ -713,13 +786,26 @@ const ChatPage: React.FC = () => {
             const newConv: Conversation = {
               jid,
               name: getContactName(userId, currentUser?.id),
-              lastMessage: `Contact: ${getContactName(userId, currentUser?.id)}`,
+              lastMessage: `Contact: ${getContactName(
+                userId,
+                currentUser?.id
+              )}`,
               lastMessageTime: new Date(),
               unreadCount: 0,
               type: "CHAT",
-              members: [{ id: userId, name: getContactName(userId, currentUser?.id) }],
+              members: [
+                { id: userId, name: getContactName(userId, currentUser?.id) },
+              ],
             };
-            return [...prev, newConv];
+            const updatedConversations = [...prev, newConv];
+            // Save to localStorage
+            if (currentUser?.id) {
+              localStorage.setItem(
+                `conversations_${currentUser.id}`,
+                JSON.stringify(updatedConversations)
+              );
+            }
+            return updatedConversations;
           });
         }
       },
@@ -865,7 +951,7 @@ const ChatPage: React.FC = () => {
   };
 
   const fetchMessageHistoryAPI = async (withJid: string) => {
-    if (!currentUser) return;
+    if (!currentUser || !API_HOST) return;
 
     try {
       const response = await axios.get(
@@ -910,14 +996,13 @@ const ChatPage: React.FC = () => {
   };
 
   const fetchConversationDetails = async (jid: string) => {
+    if (!API_HOST) return;
+
     const userId = jid.split("@")[0];
     try {
-      const response = await axios.get(
-        `${API_HOST}/users/${userId}`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
+      const response = await axios.get(`${API_HOST}/users/${userId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       const data = response.data;
       const isGroup = data.is_group || false;
       setCurrentConversationDetails({
@@ -968,7 +1053,7 @@ const ChatPage: React.FC = () => {
   };
 
   const addGroupMember = (groupJid: string, userId: string) => {
-    if (!connected || !connectionRef.current) return;
+    if (!connected || !connectionRef.current || !DOMAIN) return;
     const iq = $iq({ type: "set", to: groupJid, id: uuidv4() })
       .c("admin", { xmlns: "http://jabber.org/protocol/muc#admin" })
       .c("item", { jid: `${userId}@${DOMAIN}`, affiliation: "member" });
@@ -984,7 +1069,7 @@ const ChatPage: React.FC = () => {
   };
 
   const removeGroupMember = (groupJid: string, userId: string) => {
-    if (!connected || !connectionRef.current) return;
+    if (!connected || !connectionRef.current || !DOMAIN) return;
     const iq = $iq({ type: "set", to: groupJid, id: uuidv4() })
       .c("admin", { xmlns: "http://jabber.org/protocol/muc#admin" })
       .c("item", { jid: `${userId}@${DOMAIN}`, affiliation: "none" });
@@ -1006,7 +1091,17 @@ const ChatPage: React.FC = () => {
       type: "unavailable",
     });
     connectionRef.current.send(pres.tree());
-    setConversations((prev) => prev.filter((conv) => conv.jid !== groupJid));
+    setConversations((prev) => {
+      const updatedConversations = prev.filter((conv) => conv.jid !== groupJid);
+      // Save to localStorage
+      if (currentUser?.id) {
+        localStorage.setItem(
+          `conversations_${currentUser.id}`,
+          JSON.stringify(updatedConversations)
+        );
+      }
+      return updatedConversations;
+    });
     if (activeConversation === groupJid) {
       setActiveConversation("");
       setCurrentConversationDetails(null);
@@ -1083,7 +1178,11 @@ const ChatPage: React.FC = () => {
   // Render loading state during auth check
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bbg-[var(--background)] text-[var(--foreground)]">
+      <div
+        className={`min-h-screen flex items-center justify-center ${
+          isDarkMode ? "dark:bg-[var(--background)]" : "bg-gray-100"
+        } text-[var(--foreground)]`}
+      >
         <div className="flex flex-col items-center space-y-4">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           <span className="text-gray-600 dark:text-white text-sm">
@@ -1097,7 +1196,11 @@ const ChatPage: React.FC = () => {
   // Render connection error
   if (connectionError) {
     return (
-      <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex items-center justify-center">
+      <div
+        className={`min-h-screen flex items-center justify-center ${
+          isDarkMode ? "dark:bg-[var(--background)]" : "bg-gray-100"
+        } text-[var(--foreground)]`}
+      >
         <div className="bg-white p-8 rounded-lg shadow-md text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg
@@ -1131,8 +1234,12 @@ const ChatPage: React.FC = () => {
 
   // Render main chat interface
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex">
- Flats  <SidebarNav onClose={() => {}} currentPath={pathname} />
+    <div
+      className={`min-h-screen flex ${
+        isDarkMode ? "dark:bg-[var(--background)]" : "bg-gray-100"
+      } text-[var(--foreground)]`}
+    >
+      <SidebarNav onClose={() => {}} currentPath={pathname} />
       <div className="flex-1 flex ml-20">
         <RoomList
           conversations={conversations}
@@ -1147,7 +1254,12 @@ const ChatPage: React.FC = () => {
             <>
               <ChatHeader
                 activeConversation={activeConversation}
-                getDisplayName={(jid: string) => getContactName(jid.split("@")[0], currentUser?.id)}
+                conversationName={
+                  getContactName(
+                    activeConversation.split("@")[0],
+                    currentUser?.id
+                  ) || activeConversation
+                }
                 getAvatarColor={getAvatarColor}
                 onCallClick={() => console.log("Voice call")}
                 onVideoClick={() => console.log("Video call")}
@@ -1215,7 +1327,15 @@ const ChatPage: React.FC = () => {
                 },
               ],
             };
-            return [newConv, ...prev];
+            const updatedConversations = [newConv, ...prev];
+            // Save to localStorage
+            if (currentUser?.id) {
+              localStorage.setItem(
+                `conversations_${currentUser.id}`,
+                JSON.stringify(updatedConversations)
+              );
+            }
+            return updatedConversations;
           });
           startConversation(jid);
         }}

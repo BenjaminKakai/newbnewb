@@ -1,25 +1,27 @@
-// middleware.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = "http://138.68.190.213:3010";
-const API_KEY = "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
+const API_BASE_URL = process.env.NEXT_PUBLIC_USER_API_BASE_URL;
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
-// Protected routes that require authentication
 const PROTECTED_ROUTES = ['/chat', '/calls', '/settings', '/wallet'];
 
-// Helper function to check if token is expired (basic JWT check)
 function isTokenExpired(token: string): boolean {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const currentTime = Math.floor(Date.now() / 1000);
     return payload.exp < currentTime;
   } catch {
-    return true; // If we can't parse it, consider it expired
+    return true; 
   }
 }
 
-// Function to refresh access token
 async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string } | null> {
+  if (!API_BASE_URL || !API_KEY) {
+    console.error('Missing API_BASE_URL or API_KEY environment variables');
+    return null;
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
       method: 'POST',

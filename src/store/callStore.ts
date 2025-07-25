@@ -80,8 +80,8 @@ interface CallState {
   setRemoteStream: (stream: MediaStream | null) => void;
 }
 
-const API_BASE_URL = "https://calls-dev.wasaachat.com/v1";
-const API_KEY = "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
+const API_BASE_URL = process.env.NEXT_PUBLIC_CALL_API_BASE_URL;
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
 export const useCallStore = create<CallState>()(
   devtools(
@@ -143,7 +143,7 @@ export const useCallStore = create<CallState>()(
           track.enabled = !newMutedState;
         });
         set({ isMuted: newMutedState });
-        import('./callSocket').then(({ callSocket }) => {
+        import('../services/callSocket').then(({ callSocket }) => {
           if (callSocket.isConnected()) {
             callSocket.toggleMute(newMutedState);
           }
@@ -163,7 +163,7 @@ export const useCallStore = create<CallState>()(
           track.enabled = newVideoState;
         });
         set({ isVideoEnabled: newVideoState });
-        import('./callSocket').then(({ callSocket }) => {
+        import('../services/callSocket').then(({ callSocket }) => {
           if (callSocket.isConnected()) {
             callSocket.toggleVideo(newVideoState);
           }
@@ -181,7 +181,7 @@ export const useCallStore = create<CallState>()(
         const { handRaised } = get();
         const newHandRaisedState = !handRaised;
         set({ handRaised: newHandRaisedState });
-        import('./callSocket').then(({ callSocket }) => {
+        import('../services/callSocket').then(({ callSocket }) => {
           if (callSocket.isConnected()) {
             callSocket.raiseHand(newHandRaisedState);
           }
@@ -215,7 +215,7 @@ export const useCallStore = create<CallState>()(
         try {
           set({ isConnecting: true, connectionError: null });
           const stream = await get().initializeMedia(callType);
-          const { callSocket } = await import('./callSocket');
+          const { callSocket } = await import('../services/callSocket');
           if (!callSocket.isConnected()) {
             throw new Error('Socket not connected');
           }
@@ -263,7 +263,7 @@ export const useCallStore = create<CallState>()(
         try {
           set({ isConnecting: true, connectionError: null });
           const stream = await get().initializeMedia(callType);
-          const { callSocket } = await import('./callSocket');
+          const { callSocket } = await import('../services/callSocket');
           if (!callSocket.isConnected()) {
             throw new Error('Socket not connected');
           }
@@ -310,7 +310,7 @@ export const useCallStore = create<CallState>()(
         try {
           const callType = get().currentCall?.callType || 'voice';
           const stream = await get().initializeMedia(callType);
-          const { callSocket } = await import('./callSocket');
+          const { callSocket } = await import('../services/callSocket');
           if (!callSocket.isConnected()) {
             throw new Error('Socket not connected');
           }
@@ -333,7 +333,7 @@ export const useCallStore = create<CallState>()(
       },
 
       rejectCall: () => {
-        import('./callSocket').then(({ callSocket }) => {
+        import('../services/callSocket').then(({ callSocket }) => {
           callSocket.rejectCall();
         });
         get().endCall();
@@ -341,7 +341,7 @@ export const useCallStore = create<CallState>()(
       },
 
       endCall: () => {
-        import('./callSocket').then(({ callSocket }) => {
+        import('../services/callSocket').then(({ callSocket }) => {
           callSocket.endCall();
         });
         const { localStream, remoteStream } = get();

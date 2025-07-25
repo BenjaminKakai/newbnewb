@@ -1,11 +1,13 @@
+
 "use client";
 
 import React from "react";
 import { Phone, Video } from "lucide-react";
+import { useContactsStore } from "@/store/contactsStore";
 
 interface ChatHeaderProps {
   activeConversation: string;
-  getDisplayName: (jid: string) => string;
+  conversationName: string;
   getAvatarColor: (jid: string) => string;
   onCallClick?: () => void;
   onVideoClick?: () => void;
@@ -14,12 +16,14 @@ interface ChatHeaderProps {
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
   activeConversation,
-  getDisplayName,
+  conversationName,
   getAvatarColor,
   onCallClick,
   onVideoClick,
   setShowUserInfoModal,
 }) => {
+  const { getContactAvatar } = useContactsStore();
+
   if (!activeConversation) {
     return null;
   }
@@ -35,9 +39,15 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   };
 
   const handleInfo = () => {
-    console.log("Contact info opened");
+    console.log("Group info opened");
     setShowUserInfoModal(true);
   };
+
+  // Extract user ID from JID (e.g., groupId@conference.xmpp-dev.wasaachat.com)
+  const getUserIdFromJid = (jid: string) => jid.split("@")[0];
+  const userId = getUserIdFromJid(activeConversation);
+  const contactAvatar = getContactAvatar(userId); // Fetch avatar from contactsStore
+  const displayAvatar = contactAvatar; // Use contact avatar if available
 
   return (
     <div className="bg-gray-100 dark:bg-[var(--background)] border-b border-gray-200 px-6 py-4">
@@ -53,20 +63,22 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
                 activeConversation
               )}`}
             >
-              <span>
-                {getDisplayName(activeConversation).charAt(0).toUpperCase()}
-              </span>
+              {displayAvatar ? (
+                <img
+                  src={displayAvatar}
+                  alt={conversationName}
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <span>{conversationName.charAt(0).toUpperCase()}</span>
+              )}
             </div>
-            {/* Online indicator */}
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
           </div>
 
-          {/* User info */}
+          {/* Group info */}
           <div>
-            <h2 className="text-lg font-semibold">
-              {getDisplayName(activeConversation)}
-            </h2>
-            <p className="text-sm text-gray-500">Last seen 1min ago</p>
+            <h2 className="text-lg font-semibold">{conversationName}</h2>
+            <p className="text-sm text-gray-500">Group chat</p>
           </div>
         </div>
 

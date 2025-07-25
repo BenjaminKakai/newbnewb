@@ -15,9 +15,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const messaging = typeof window !== "undefined" ? getMessaging(app) : null;
 
-// VAPID key - you need to generate this in Firebase Console
-// Go to Project Settings > Cloud Messaging > Web Push certificates
-const VAPID_KEY = "BFSxghz-iaJ6k_nOSZyn7GTn8QuBTp2iHwvync98rFxunZfDntsjao2R6Ja7-J5mD0Ife9sVA-nHk6HZ6ZG8BI0"; // Replace with your actual VAPID key
+const VAPID_KEY = "BFSxghz-iaJ6k_nOSZyn7GTn8QuBTp2iHwvync98rFxunZfDntsjao2R6Ja7-J5mD0Ife9sVA-nHk6HZ6ZG8BI0"; 
 
 // Request notification permission
 export const requestNotificationPermission = async (): Promise<boolean> => {

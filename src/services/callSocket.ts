@@ -1,9 +1,9 @@
 // src/store/callSocket.ts
 import { useRef, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useCallStore } from './callStore';
+import { useCallStore } from '../store/callStore';
 
-const SOCKET_URL = 'https://calls-dev.wasaachat.com';
+const SOCKET_URL = process.env.NEXT_PUBLIC_CALL_SOCKET_URL;
 
 interface CallInitiation {
   participantIds: string[];
@@ -69,16 +69,14 @@ class CallSocketService {
     try {
       this.onLog(`🔌 Connecting to call socket... (attempt ${this.reconnectAttempts + 1})`);
       
-      // CRITICAL FIX: Enhanced socket configuration for stability
       this.socket = io(SOCKET_URL, {
         auth: { token: token.startsWith('Bearer ') ? token : `Bearer ${token}` },
-        transports: ["polling"],  // ✅ ONLY POLLING
-        upgrade: false,           // ✅ NO UPGRADE
-        timeout: 10000,           // ✅ TIMEOUT SETTING
+        transports: ["polling"],
+        upgrade: false,
+        timeout: 10000,
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: 1000,
-        // reconnectionDelayMax: 5000, // Not needed for polling config
         forceNew: true,
         autoConnect: true,
       });
@@ -123,7 +121,6 @@ class CallSocketService {
       this.isConnecting = false;
       useCallStore.getState().setConnected(false);
       
-      // Auto-reconnect for certain disconnect reasons
       if (reason === 'io server disconnect' || reason === 'transport close') {
         this.onLog('🔄 Attempting auto-reconnect...');
         setTimeout(() => {
@@ -141,13 +138,11 @@ class CallSocketService {
       useCallStore.getState().setConnectionError(error.message);
     });
     
-    // CRITICAL FIX: Enhanced call offer handling
     this.socket.on('call-offer', (data: SocketCallData) => {
       this.onLog(`📞 Call offer received: callId=${data.callId}, callType=${data.callType}, hasOffer=${!!data.offer}`);
       this.handleIncomingCall(data);
     });
     
-    // CRITICAL FIX: Enhanced call answer handling
     this.socket.on('call-answer', (data: SocketCallData) => {
       this.onLog(`📞 Call answer received: callId=${data.callId}, senderId=${data.senderId}, hasAnswer=${!!data.answer}`);
       this.handleCallAccepted();
@@ -197,7 +192,6 @@ class CallSocketService {
   private handleIncomingCall(data: SocketCallData): void {
     const callStore = useCallStore.getState();
     
-    // CRITICAL FIX: Proper incoming call setup with media states
     callStore.setCurrentCall({
       id: data.callId,
       type: 'incoming',
@@ -208,7 +202,7 @@ class CallSocketService {
           name: data.callerName || 'Unknown Caller',
           avatar: data.callerAvatar,
           status: 'connecting',
-          isMuted: false, // Both audio and video enabled for incoming calls
+          isMuted: false,
           isVideoEnabled: data.callType === 'video',
         },
       ],
@@ -301,7 +295,6 @@ class CallSocketService {
     this.onLog(`✋ Hand raised event received`);
   }
 
-  // CRITICAL FIX: Enhanced emit with connection checking and retry
   emit(event: string, data?: unknown): void {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
@@ -310,7 +303,6 @@ class CallSocketService {
       this.onLog(`⚠️ Cannot emit ${event} - socket not connected`);
       useCallStore.getState().setConnectionError(`Socket not connected for event ${event}`);
       
-      // Try to reconnect if we have a token
       if (this.currentToken && !this.isConnecting) {
         this.onLog('🔄 Attempting reconnect for emit...');
         this.connect(this.currentToken);

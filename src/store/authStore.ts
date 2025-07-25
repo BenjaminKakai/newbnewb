@@ -88,15 +88,13 @@ interface AuthState {
   refreshUserData: () => Promise<void>;
 }
 
-const API_BASE_URL = "http://138.68.190.213:3010";
-const API_KEY =
-  process.env.NEXT_PUBLIC_API_KEY ||
-  "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
+const API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_BASE_URL;
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
 const getDefaultHeaders = (accessToken?: string) => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "x-api-key": API_KEY,
+    "x-api-key": API_KEY!,
   };
 
   if (accessToken) {
@@ -508,7 +506,7 @@ export const useAuthStore = create<AuthState>()(
               }
             }
             keysToRemove.forEach((key) => localStorage.removeItem(key));
-          } catch (error) {
+          } catch (error: any) {
             console.warn(
               "Error clearing localStorage during local logout:",
               error
@@ -659,7 +657,7 @@ export const useTokenValidation = () => {
 };
 
 export const useAuthInit = () => {
-  const { setUser, setUserId, isAuthenticated } = useAuthStore();
+  const { setUser, isAuthenticated } = useAuthStore();
 
   React.useEffect(() => {
     const storedToken = localStorage.getItem("access_token");
@@ -677,7 +675,7 @@ export const useAuthInit = () => {
         localStorage.removeItem("refresh_token");
       }
     }
-  }, [setUser, setUserId, isAuthenticated]);
+  }, [setUser, isAuthenticated]);
 };
 
 export const useKycFlow = () => {

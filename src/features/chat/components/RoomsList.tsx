@@ -1,9 +1,11 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useContactsStore } from "@/store/contactsStore";
 import { useSocket } from "@/services/notificationSocket";
+import { useStatusStore, StatusUser, StatusData } from "@/store/statusStore";
 import NewChatModal from "./NewChatModal";
 import StatusViewerModal from "./StatusViewerModal";
 import StatusUploadModal from "./StatuUploadModal";
@@ -18,36 +20,6 @@ interface Conversation {
   lastMessageTime: Date;
   unreadCount: number;
   isOnline?: boolean;
-}
-
-interface StatusUser {
-  id: string;
-  name: string;
-  avatar?: string;
-  statuses: StatusItem[];
-}
-
-interface StatusItem {
-  id: string;
-  type: "text" | "image" | "video";
-  content: string;
-  backgroundColor?: string;
-  textColor?: string;
-  font?: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  timestamp: string;
-  views: number;
-  isViewed: boolean;
-}
-
-interface StatusData {
-  type: "text" | "image" | "video";
-  content: string;
-  backgroundColor?: string;
-  textColor?: string;
-  font?: string;
-  image?: File;
 }
 
 interface Notification {
@@ -274,18 +246,16 @@ const RoomList: React.FC<RoomListProps> = ({
   fetchExistingConversations,
 }) => {
   const { user, accessToken } = useAuthStore();
-  const { contacts, getContactName, fetchContacts } = useContactsStore();
+  const { contacts, getContactName, getContactAvatar, fetchContacts } = useContactsStore();
   const { notifications, markAsRead, markAllAsRead } = useSocket();
+  const { statusUsers, isLoadingStatuses, fetchStatuses, uploadStatus } = useStatusStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [activeTab, setActiveTab] = useState("All");
-  const [statusUsers, setStatusUsers] = useState<StatusUser[]>([]);
-  const [isLoadingStatuses, setIsLoadingStatuses] = useState(false);
   const [showStatusViewer, setShowStatusViewer] = useState(false);
   const [showStatusUpload, setShowStatusUpload] = useState(false);
-  const [selectedStatusUser, setSelectedStatusUser] =
-    useState<StatusUser | null>(null);
+  const [selectedStatusUser, setSelectedStatusUser] = useState<StatusUser | null>(null);
   const [selectedUserIndex, setSelectedUserIndex] = useState(0);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [notificationPosition, setNotificationPosition] = useState({ x: 0, y: 0 });
@@ -333,139 +303,10 @@ const RoomList: React.FC<RoomListProps> = ({
   }, [accessToken, user?.id, fetchContacts]);
 
   useEffect(() => {
-    const fetchStatuses = async () => {
-      setIsLoadingStatuses(true);
-      try {
-        const response = await fetch("http://138.68.190.213:38472/v1/status", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!response.ok) throw new Error("Failed to fetch statuses");
-        const data = await response.json();
-        const rawStatuses = data.data || [];
-
-        const statusUsersMap: { [key: string]: StatusUser } = {};
-        rawStatuses.forEach((status: any) => {
-          const userId = status.userId;
-          const statusItem: StatusItem = {
-            id: status.id,
-            type: status.media.length > 0 ? status.media[0].type : "text",
-            content: status.content,
-            backgroundColor: "#3B82F6",
-            textColor: "#FFFFFF",
-            font: "font-sans",
-            imageUrl:
-              status.media.length > 0 && status.media[0].type === "image"
-                ? status.media[0].url
-                : undefined,
-            videoUrl:
-              status.media.length > 0 && status.media[0].type === "video"
-                ? status.media[0].url
-                : undefined,
-            timestamp: status.createdAt,
-            views: status.views,
-            isViewed: false,
-          };
-
-          if (!statusUsersMap[userId]) {
-            statusUsersMap[userId] = {
-              id: userId,
-              name: getContactName(userId, user?.id),
-              avatar: contacts.find((c) => c.id === userId)?.avatar,
-              statuses: [],
-            };
-          }
-          statusUsersMap[userId].statuses.push(statusItem);
-        });
-
-        const mappedStatuses: StatusUser[] = Object.values(statusUsersMap);
-
-        if (mappedStatuses.length === 0) {
-          mappedStatuses.push(
-            {
-              id: "dummy1",
-              name: getContactName("dummy1", user?.id) || "John Doe",
-              avatar: contacts[0]?.avatar,
-              statuses: [
-                {
-                  id: "dummy1-status1",
-                  type: "text",
-                  content: "Hello World!",
-                  backgroundColor: "#3B82F6",
-                  textColor: "#FFFFFF",
-                  font: "font-sans",
-                  timestamp: new Date().toISOString(),
-                  views: 0,
-                  isViewed: false,
-                },
-              ],
-            },
-            {
-              id: "dummy2",
-              name: getContactName("dummy2", user?.id) || "Jane Smith",
-              avatar: contacts[1]?.avatar,
-              statuses: [
-                {
-                  id: "dummy2-status1",
-                  type: "image",
-                  content: "",
-                  imageUrl: "https://via.placeholder.com/400",
-                  timestamp: new Date().toISOString(),
-                  views: 0,
-                  isViewed: false,
-                },
-              ],
-            }
-          );
-        }
-        setStatusUsers(mappedStatuses);
-      } catch (error) {
-        console.error("Failed to fetch statuses:", error);
-        toast.error("Failed to load statuses");
-        setStatusUsers([
-          {
-            id: "dummy1",
-            name: getContactName("dummy1", user?.id) || "John Doe",
-            avatar: contacts[0]?.avatar,
-            statuses: [
-              {
-                id: "dummy1-status1",
-                type: "text",
-                content: "Hello World!",
-                backgroundColor: "#3B82F6",
-                textColor: "#FFFFFF",
-                font: "font-sans",
-                timestamp: new Date().toISOString(),
-                views: 0,
-                isViewed: false,
-              },
-            ],
-          },
-          {
-            id: "dummy2",
-            name: getContactName("dummy2", user?.id) || "Jane Smith",
-            avatar: contacts[1]?.avatar,
-            statuses: [
-              {
-                id: "dummy2-status1",
-                type: "image",
-                content: "",
-                imageUrl: "https://via.placeholder.com/400",
-                timestamp: new Date().toISOString(),
-                views: 0,
-                isViewed: false,
-              },
-            ],
-          },
-        ]);
-      } finally {
-        setIsLoadingStatuses(false);
-      }
-    };
-
     if (accessToken) {
       fetchStatuses();
     }
-  }, [accessToken, contacts, user?.id, getContactName]);
+  }, [accessToken, fetchStatuses]);
 
   const handleStatusClick = (user: StatusUser, index: number) => {
     setSelectedStatusUser(user);
@@ -484,73 +325,9 @@ const RoomList: React.FC<RoomListProps> = ({
 
   const handleStatusUpload = async (statusData: StatusData) => {
     try {
-      const formData = new FormData();
-      formData.append("type", statusData.type);
-      if (statusData.type === "text") {
-        formData.append("content", statusData.content);
-        formData.append(
-          "backgroundColor",
-          statusData.backgroundColor || "#3B82F6"
-        );
-        formData.append("textColor", statusData.textColor || "#FFFFFF");
-        formData.append("font", statusData.font || "font-sans");
-      } else if (statusData.image) {
-        formData.append("media", statusData.image);
-      }
-
-      const response = await fetch("http://138.68.190.213:38472/v1/status", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error("Failed to upload status");
+      await uploadStatus(statusData);
       toast.success("Status uploaded successfully");
-
-      const fetchResponse = await fetch(
-        "http://138.68.190.213:38472/v1/status",
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
-      const data = await fetchResponse.json();
-      const rawStatuses = data.data || [];
-      const statusUsersMap: { [key: string]: StatusUser } = {};
-      rawStatuses.forEach((status: any) => {
-        const userId = status.userId;
-        const statusItem: StatusItem = {
-          id: status.id,
-          type: status.media.length > 0 ? status.media[0].type : "text",
-          content: status.content,
-          backgroundColor: "#3B82F6",
-          textColor: "#FFFFFF",
-          font: "font-sans",
-          imageUrl:
-            status.media.length > 0 && status.media[0].type === "image"
-              ? status.media[0].url
-              : undefined,
-          videoUrl:
-            status.media.length > 0 && status.media[0].type === "video"
-              ? status.media[0].url
-              : undefined,
-          timestamp: status.createdAt,
-          views: status.views,
-          isViewed: false,
-        };
-
-        if (!statusUsersMap[userId]) {
-          statusUsersMap[userId] = {
-            id: userId,
-            name: getContactName(userId, user?.id),
-            avatar: contacts.find((c) => c.id === userId)?.avatar,
-            statuses: [],
-          };
-        }
-        statusUsersMap[userId].statuses.push(statusItem);
-      });
-      setStatusUsers(Object.values(statusUsersMap));
     } catch (error) {
-      console.error("Failed to upload status:", error);
       toast.error("Failed to upload status");
     }
   };
@@ -558,7 +335,7 @@ const RoomList: React.FC<RoomListProps> = ({
   const getAvatarColor = () => "bg-gray-500";
 
   return (
-    <div className="w-90 bg-[var(--background)] text-[var(--foreground)] shadow-lg flex flex-col">
+    <div className="w-90 bg-[var(--background)] text-[var(--foreground)] shadow-Toaster shadow-lg flex flex-col">
       <div className="p-4 pb-3">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Chats</h1>
@@ -714,72 +491,77 @@ const RoomList: React.FC<RoomListProps> = ({
           </div>
         ) : (
           <div className="overflow-y-auto h-[calc(100vh-200px)]">
-            {filteredConversations().map((conv) => (
-              <div
-                key={conv.jid}
-                onClick={() => onConversationSelect(conv.jid)}
-                className={`px-4 py-4 hover:bg-[var(--bg-card)] hover:rounded-lg cursor-pointer transition-colors ${
-                  activeConversation === conv.jid
-                    ? "bg-[var(--bg-card)] rounded-lg"
-                    : ""
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="relative flex-shrink-0">
-                    <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${getAvatarColor()}`}
-                    >
-                      {conv.avatar ? (
-                        <img
-                          src={conv.avatar}
-                          alt={getContactName(getUserIdFromJid(conv.jid), user?.id)}
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-lg">
-                          {getContactName(getUserIdFromJid(conv.jid), user?.id)
-                            .charAt(0)
-                            .toUpperCase()}
-                        </span>
+            {filteredConversations().map((conv) => {
+              const userId = getUserIdFromJid(conv.jid);
+              const contactAvatar = getContactAvatar(userId); // Get avatar from contactsStore
+              const displayAvatar = contactAvatar || conv.avatar; // Prefer contact avatar, fallback to conv.avatar
+              const displayName = getContactName(userId, user?.id);
+
+              return (
+                <div
+                  key={conv.jid}
+                  onClick={() => onConversationSelect(conv.jid)}
+                  className={`px-4 py-4 hover:bg-[var(--bg-card)] hover:rounded-lg cursor-pointer transition-colors ${
+                    activeConversation === conv.jid
+                      ? "bg-[var(--bg-card)] rounded-lg"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="relative flex-shrink-0">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${getAvatarColor()}`}
+                      >
+                        {displayAvatar ? (
+                          <img
+                            src={displayAvatar}
+                            alt={displayName}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-lg">
+                            {displayName.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      {conv.isOnline && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
                       )}
                     </div>
-                    {conv.isOnline && (
-                      <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-base font-semibold truncate mb-1">
-                          {getContactName(getUserIdFromJid(conv.jid), user?.id)}
-                        </p>
-                        <div className="flex items-center">
-                          {conv.lastMessage.includes("You:") && (
-                            <span className="text-sm mr-1">You:</span>
-                          )}
-                          {conv.lastMessage.includes("received") && (
-                            <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mr-2">
-                              <span className="text-white text-xs">Ksh </span>
-                            </div>
-                          )}
-                          <p className="text-sm truncate">
-                            {conv.lastMessage.replace("You:", "").trim()}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-base font-semibold truncate mb-1">
+                            {displayName}
+                          </p>
+                          <div className="flex items-center">
+                            {conv.lastMessage.includes("You:") && (
+                              <span className="text-sm mr-1">You:</span>
+                            )}
+                            {conv.lastMessage.includes("received") && (
+                              <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mr-2">
+                                <span className="text-white text-xs">Ksh </span>
+                              </div>
+                            )}
+                            <p className="text-sm truncate">
+                              {conv.lastMessage.replace("You:", "").trim()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end ml-2">
+                          <p className="text-xs mb-1">
+                            {conv.lastMessageTime.toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                           </p>
                         </div>
-                      </div>
-                      <div className="flex flex-col items-end ml-2">
-                        <p className="text-xs mb-1">
-                          {conv.lastMessageTime.toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

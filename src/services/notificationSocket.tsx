@@ -38,6 +38,9 @@ interface SocketContextType {
   markAllAsRead: () => void;
 }
 
+const NOTIFICATION_URL = process.env.NEXT_PUBLIC_NOTIFICATION_API_BASE_URL;
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -49,9 +52,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!accessToken) return;
 
     // Initialize Socket.IO
-    const socketInstance = io("http://138.68.190.213:3002", {
+    const socketInstance = io(NOTIFICATION_URL, {
       extraHeaders: {
-        "x-api-key": "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==",
+        "x-api-key": API_KEY,
         "bearer-token": accessToken,
       },
     });
