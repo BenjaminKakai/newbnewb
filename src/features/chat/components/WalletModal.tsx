@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, DollarSign, Send, Loader } from "lucide-react";
 import { useWalletStore } from "@/store/walletStore";
-import chatSocketService from "@/services/chatSocket";
 
 interface WalletModalProps {
   currentUserId?: string;
@@ -248,7 +247,7 @@ const WalletModal: React.FC<WalletModalProps> = ({
           paymentAmount: numAmount,
         };
 
-        chatSocketService.sendMessage(paymentData);
+        // chatSocketService.sendMessage(paymentData);
         handleClose();
 
         setTimeout(() => {

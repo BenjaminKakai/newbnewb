@@ -1,664 +1,1001 @@
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
+import { Strophe, $iq, $pres } from "strophe.js";
+import { xmppClient } from "@/services/xmppClient";
 
-// Types
-interface Contact {
+const API_HOST = process.env.NEXT_PUBLIC_XMPP_API_HOST;
+const DOMAIN = process.env.NEXT_PUBLIC_XMPP_DOMAIN;
+
+interface ConversationMember {
   id: string;
-  user_id: string;
-  contact_id: string;
-  name: string;
-  phone_number?: string;
-  email?: string;
-  is_blocked: boolean;
-  is_favourite: boolean;
-  is_reported: boolean;
-  is_muted: boolean;
-  is_archived: boolean;
-  contact: {
-    id: string;
-    phone_number: string;
-    email?: string;
-    profile_picture?: string;
-    about?: string;
-  };
+  name?: string;
+  avatar?: string;
+  phoneNumber?: string;
+  lastSeen?: string;
+}
+
+interface Conversation {
+  jid: string;
+  name?: string;
+  avatar?: string;
+  lastMessage: string;
+  lastMessageTime: Date;
+  unreadCount: number;
+  isOnline?: boolean;
+  type?: "CHAT" | "GROUP";
+  members?: ConversationMember[];
+  starred?: boolean;
 }
 
 interface Message {
   id: string;
-  conversationId: string;
-  senderId: string;
-  senderName: string;
-  content: string;
-  displayMessage?: string;
-  type: "TEXT" | "PAYMENT" | "IMAGE" | "FILE" | "VOICE";
-  sentAt: string | Date;
-  status?: "sending" | "delivered" | "read" | "failed";
-  starred?: boolean;
-  deleted?: boolean;
-  isPayment?: boolean;
-  paymentDirection?: "sent" | "received";
-  paymentAmount?: number;
-  clientMessageId?: string;
+  from: string;
+  to: string;
+  text: string;
+  timestamp: Date;
+  isOwn: boolean;
 }
 
-interface Conversation {
+interface User {
   id: string;
-  type: "DIRECT" | "GROUP";
-  name?: string;
-  members?: Array<{ 
-    id: string; 
-    name: string; 
-    avatar?: string; 
-    isOnline?: boolean; 
-    lastSeen?: string;
-    role?: "admin" | "member";
-  }>;
-  participants?: string[];
-  lastMessage?: string | { content: string; isPayment: boolean };
-  lastMessageAt?: string | Date;
-  archived?: boolean;
-  description?: string;
-  avatarUrl?: string;
-  unreadCount?: number;
-  isTyping?: boolean;
-  typingUsers?: string[];
-  messages?: Message[]; // Add messages array to conversation
+  jid: string;
 }
 
-interface ToastMessage {
-  id: string;
-  message: string;
-  type: "success" | "error" | "warning" | "info";
-}
-
-interface ChatState {
-  // Connection state
-  isConnected: boolean;
-  connectionStatus: string;
-  
-  // Current user
-  currentUser: { id: string; name?: string } | null;
-  
-  // Loading states
-  isLoadingContacts: boolean;
-  isLoadingConversations: boolean;
-  isLoadingMessages: boolean;
-  
-  // Contacts
-  contacts: Contact[];
-  contactsMap: Map<string, Contact>;
-  
-  // Conversations
+interface ChatStore {
   conversations: Conversation[];
-  archivedConversations: Conversation[];
-  currentConversation: Conversation | null;
-  currentTab: "all" | "unread" | "groups" | "archived" | "starred";
-  
-  // Messages
-  messages: Map<string, Message[]>;
-  starredMessages: Message[];
-  starredMessageIds: Set<string>;
-  
-  // UI state
-  messageInput: string;
-  searchQuery: string;
-  typingUsers: Set<string>;
-  conversationTypingUsers: Map<string, Set<string>>;
-  toasts: ToastMessage[];
-  
-  // Modals
-  showNewChatModal: boolean;
-  showGroupInfoModal: boolean;
-  showAddMembersModal: boolean;
-  showEmojiPicker: boolean;
-  showWalletModal: boolean;
-  showUserInfoModal: boolean;
-  
-  // Form states
-  newChatType: "DIRECT" | "GROUP";
-  directChatUserId: string;
-  groupChatName: string;
-  groupChatMembers: string;
-  addMembersInput: string;
-}
-
-interface ChatActions {
-  // Connection actions
-  setConnectionStatus: (status: string) => void;
-  setIsConnected: (connected: boolean) => void;
-  
-  // Current user actions
-  setCurrentUser: (user: { id: string; name?: string } | null) => void;
-  
-  // Loading actions
-  setIsLoadingContacts: (loading: boolean) => void;
-  setIsLoadingConversations: (loading: boolean) => void;
-  setIsLoadingMessages: (loading: boolean) => void;
-  
-  // Contact actions
-  setContacts: (contacts: Contact[]) => void;
-  setContactsMap: (map: Map<string, Contact>) => void;
-  
-  // Conversation actions
+  readConversations: string[];
+  messages: Message[];
+  connected: boolean;
+  connectionStatus: string;
+  connectionError: string | null;
+  currentConversationDetails: Conversation | null;
+  activeConversation: string;
   setConversations: (conversations: Conversation[]) => void;
+  updateConversation: (jid: string, updates: Partial<Conversation>) => void;
   addConversation: (conversation: Conversation) => void;
-  updateConversation: (conversationId: string, updates: Partial<Conversation>) => void;
-  moveConversationToTop: (conversationId: string) => void;
-  setCurrentConversation: (conversation: Conversation | null) => void;
-  setCurrentTab: (tab: "all" | "unread" | "groups" | "archived" | "starred") => void;
-  markConversationAsRead: (conversationId: string) => void;
-  
-  // Message actions
-  setMessages: (conversationId: string, messages: Message[]) => void;
-  addMessage: (message: Message) => void;
-  updateMessage: (messageId: string, updates: Partial<Message>) => void;
-  updateMessageStatus: (clientMessageId: string, messageId: string, status: Message['status']) => void;
-  toggleStarMessage: (messageId: string) => void;
-  loadStarredMessages: () => void;
-  saveStarredMessages: () => void;
-  
-  // UI actions
-  setMessageInput: (input: string) => void;
-  setSearchQuery: (query: string) => void;
-  setTypingUsers: (users: Set<string>) => void;
-  updateConversationTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
-  
-  // Toast actions
-  showToast: (message: string, type?: "success" | "error" | "warning" | "info") => void;
-  removeToast: (id: string) => void;
-  
-  // Modal actions
-  setShowNewChatModal: (show: boolean) => void;
-  setShowGroupInfoModal: (show: boolean) => void;
-  setShowAddMembersModal: (show: boolean) => void;
-  setShowEmojiPicker: (show: boolean) => void;
-  setShowWalletModal: (show: boolean) => void;
-  setShowUserInfoModal: (show: boolean) => void;
-  
-  // Form actions
-  setNewChatType: (type: "DIRECT" | "GROUP") => void;
-  setDirectChatUserId: (userId: string) => void;
-  setGroupChatName: (name: string) => void;
-  setGroupChatMembers: (members: string) => void;
-  setAddMembersInput: (input: string) => void;
-  
-  // Helper actions
-  getContactName: (userId: string, currentUserId?: string) => string;
-  getContactAvatar: (userId: string) => string;
-  getConversationDisplayName: (conversation: Conversation, currentUserId?: string) => string;
-  getFilteredConversations: () => Conversation[];
+  removeConversation: (jid: string) => void;
+  markConversationAsRead: (jid: string) => void;
+  toggleStarredConversation: (jid: string) => void;
+  clearConversations: () => void;
+  initializeConnection: (
+    user: User | null,
+    accessToken: string | null,
+    getContactName: (userId: string, currentUserId?: string) => string
+  ) => void;
+  disconnect: () => void;
+  sendMessage: (
+    recipientJid: string,
+    messageText: string,
+    currentUser: User | null
+  ) => void;
+  fetchConversationDetails: (
+    jid: string,
+    getContactName: (userId: string, currentUserId?: string) => string
+  ) => void;
+  startConversation: (
+    jid: string,
+    getContactName: (userId: string, currentUserId?: string) => string
+  ) => void;
 }
-
-type ChatStore = ChatState & ChatActions;
-
-// Helper function to load starred messages from localStorage
-const loadStarredMessagesFromStorage = (): Set<string> => {
-  try {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('starred-messages');
-      if (stored) {
-        return new Set(JSON.parse(stored));
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load starred messages from storage:', error);
-  }
-  return new Set();
-};
-
-// Helper function to save starred messages to localStorage
-const saveStarredMessagesToStorage = (starredIds: Set<string>) => {
-  try {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('starred-messages', JSON.stringify(Array.from(starredIds)));
-    }
-  } catch (error) {
-    console.error('Failed to save starred messages to storage:', error);
-  }
-};
 
 export const useChatStore = create<ChatStore>()(
-  devtools(
-    (set, get) => ({
-      // Initial state
-      isConnected: false,
-      connectionStatus: "Disconnected",
-      currentUser: null,
-      isLoadingContacts: false,
-      isLoadingConversations: false,
-      isLoadingMessages: false,
-      contacts: [],
-      contactsMap: new Map(),
-      conversations: [],
-      archivedConversations: [],
-      currentConversation: null,
-      currentTab: "all",
-      messages: new Map(),
-      starredMessages: [],
-      starredMessageIds: loadStarredMessagesFromStorage(), // Load from storage on init
-      messageInput: "",
-      searchQuery: "",
-      typingUsers: new Set(),
-      conversationTypingUsers: new Map(),
-      toasts: [],
-      showNewChatModal: false,
-      showGroupInfoModal: false,
-      showAddMembersModal: false,
-      showEmojiPicker: false,
-      showWalletModal: false,
-      showUserInfoModal: false,
-      newChatType: "DIRECT",
-      directChatUserId: "",
-      groupChatName: "",
-      groupChatMembers: "",
-      addMembersInput: "",
+  persist(
+    (set, get) => {
+      let connectionAttempts = 0;
+      const maxConnectionAttempts = 3;
 
-      // Connection actions
-      setConnectionStatus: (status) => set({ connectionStatus: status }),
-      setIsConnected: (connected) => set({ isConnected: connected }),
+      const isValidBareJid = (jid: string): boolean => {
+        const jidRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$/;
+        return jidRegex.test(jid);
+      };
 
-      // Current user actions
-      setCurrentUser: (user) => set({ currentUser: user }),
+      const ensureDate = (value: any): Date => {
+        if (value instanceof Date) return value;
+        const date = new Date(value);
+        return isNaN(date.getTime()) ? new Date() : date;
+      };
 
-      // Loading actions
-      setIsLoadingContacts: (loading) => set({ isLoadingContacts: loading }),
-      setIsLoadingConversations: (loading) => set({ isLoadingConversations: loading }),
-      setIsLoadingMessages: (loading) => set({ isLoadingMessages: loading }),
-
-      // Contact actions
-      setContacts: (contacts) => set({ contacts }),
-      setContactsMap: (map) => set({ contactsMap: map }),
-
-      // Conversation actions
-      setConversations: (conversations) => set({ conversations }),
-      addConversation: (conversation) => set((state) => ({
-        conversations: [conversation, ...state.conversations]
-      })),
-      updateConversation: (conversationId, updates) => set((state) => ({
-        conversations: state.conversations.map(conv => 
-          conv.id === conversationId ? { ...conv, ...updates } : conv
-        )
-      })),
-      
-      moveConversationToTop: (conversationId) => set((state) => {
-        const conversationIndex = state.conversations.findIndex(conv => conv.id === conversationId);
-        if (conversationIndex > 0) { // Only move if not already at top
-          const updatedConversations = [...state.conversations];
-          const [conversation] = updatedConversations.splice(conversationIndex, 1);
-          updatedConversations.unshift(conversation);
-          
-          console.log(`[STORE] Moved conversation ${conversationId} to top`);
-          return { conversations: updatedConversations };
-        }
-        return {}; // No change needed
-      }),
-      setCurrentConversation: (conversation) => set({ currentConversation: conversation }),
-      setCurrentTab: (tab) => set({ currentTab: tab }),
-      markConversationAsRead: (conversationId) => set((state) => ({
-        conversations: state.conversations.map(conv =>
-          conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-        )
-      })),
-
-      // Message actions
-      setMessages: (conversationId, messages) => set((state) => {
-        const newMessages = new Map(state.messages);
-        
-        // Update starred status for messages based on starredMessageIds
-        const updatedMessages = messages.map(msg => ({
-          ...msg,
-          starred: state.starredMessageIds.has(msg.id)
-        }));
-        
-        newMessages.set(conversationId, updatedMessages);
-        console.log(`[STORE] Set ${updatedMessages.length} messages for conversation ${conversationId}`);
-        
-        return { messages: newMessages, isLoadingMessages: false };
-      }),
-      
-      addMessage: (message) => set((state) => {
-        const newMessages = new Map(state.messages);
-        const convMessages = newMessages.get(message.conversationId) || [];
-        
-        // Set starred status based on starredMessageIds
-        const messageWithStarred = {
-          ...message,
-          starred: state.starredMessageIds.has(message.id)
-        };
-        
-        // Check if message already exists to prevent duplicates
-        const existingMessageIndex = convMessages.findIndex(m => m.id === message.id);
-        if (existingMessageIndex >= 0) {
-          // Update existing message
-          const updatedMessages = [...convMessages];
-          updatedMessages[existingMessageIndex] = messageWithStarred;
-          newMessages.set(message.conversationId, updatedMessages);
-        } else {
-          // Add new message
-          newMessages.set(message.conversationId, [...convMessages, messageWithStarred]);
-        }
-        
-        // Update the conversation's last message and move it to top
-        const updatedConversations = [...state.conversations];
-        const conversationIndex = updatedConversations.findIndex(conv => conv.id === message.conversationId);
-        
-        if (conversationIndex >= 0) {
-          const conversation = updatedConversations[conversationIndex];
-          
-          // Format message for display in room list
-          let displayMessage = message.content || "Message";
-          if (message.type === "PAYMENT") {
-            displayMessage = "💰 Payment";
-          } else if (message.type === "IMAGE") {
-            displayMessage = "📷 Photo";
-          } else if (message.type === "FILE") {
-            displayMessage = "📄 File";
-          } else if (message.type === "VOICE") {
-            displayMessage = "🎤 Voice message";
-          } else if (displayMessage.length > 50) {
-            displayMessage = displayMessage.substring(0, 50) + "...";
-          }
-          
-          // Update conversation with new last message info
-          const updatedConversation = {
-            ...conversation,
-            lastMessage: displayMessage,
-            lastMessageAt: message.sentAt,
-          };
-          
-          // Remove conversation from current position and add to top
-          updatedConversations.splice(conversationIndex, 1);
-          updatedConversations.unshift(updatedConversation);
-          
-          console.log(`[STORE] Updated conversation ${message.conversationId} lastMessage: "${displayMessage}"`);
-        }
-        
-        console.log(`[STORE] Added/updated message ${message.id} in conversation ${message.conversationId}`);
-        
-        return { 
-          messages: newMessages,
-          conversations: updatedConversations
-        };
-      }),
-      
-      updateMessage: (messageId, updates) => set((state) => {
-        const newMessages = new Map(state.messages);
-        for (const [convId, msgs] of newMessages.entries()) {
-          const updatedMsgs = msgs.map(msg =>
-            msg.id === messageId ? { ...msg, ...updates } : msg
-          );
-          newMessages.set(convId, updatedMsgs);
-        }
-        return { messages: newMessages };
-      }),
-      
-      updateMessageStatus: (clientMessageId, messageId, status) => set((state) => {
-        const newMessages = new Map(state.messages);
-        let updatedMessage = null;
-        let conversationId = null;
-        
-        for (const [convId, msgs] of newMessages.entries()) {
-          const updatedMsgs = msgs.map(msg => {
-            if (msg.id === clientMessageId || msg.clientMessageId === clientMessageId) {
-              updatedMessage = { ...msg, id: messageId, status };
-              conversationId = convId;
-              return updatedMessage;
-            }
-            return msg;
-          });
-          newMessages.set(convId, updatedMsgs);
-        }
-        
-        // Update conversation's last message if this was the most recent message
-        let updatedConversations = state.conversations;
-        if (updatedMessage && conversationId) {
-          const conversation = state.conversations.find(conv => conv.id === conversationId);
-          if (conversation) {
-            const conversationMessages = newMessages.get(conversationId) || [];
-            const isLatestMessage = conversationMessages[conversationMessages.length - 1]?.id === messageId;
-            
-            if (isLatestMessage) {
-              // Format message for display in room list
-              let displayMessage = updatedMessage.content || "Message";
-              if (updatedMessage.type === "PAYMENT") {
-                displayMessage = "💰 Payment";
-              } else if (updatedMessage.type === "IMAGE") {
-                displayMessage = "📷 Photo";
-              } else if (updatedMessage.type === "FILE") {
-                displayMessage = "📄 File";
-              } else if (updatedMessage.type === "VOICE") {
-                displayMessage = "🎤 Voice message";
-              } else if (displayMessage.length > 50) {
-                displayMessage = displayMessage.substring(0, 50) + "...";
-              }
-              
-              updatedConversations = state.conversations.map(conv =>
-                conv.id === conversationId
-                  ? { 
-                      ...conv, 
-                      lastMessage: displayMessage,
-                      lastMessageAt: updatedMessage.sentAt
-                    }
-                  : conv
-              );
-              
-              console.log(`[STORE] Updated conversation ${conversationId} lastMessage on status change: "${displayMessage}"`);
-            }
-          }
-        }
-        
-        console.log(`[STORE] Updated message status: ${clientMessageId} -> ${messageId} (${status})`);
-        
-        return { 
-          messages: newMessages,
-          conversations: updatedConversations
-        };
-      }),
-      
-      toggleStarMessage: (messageId) => set((state) => {
-        const newStarredIds = new Set(state.starredMessageIds);
-        const isCurrentlyStarred = newStarredIds.has(messageId);
-        
-        if (isCurrentlyStarred) {
-          newStarredIds.delete(messageId);
-        } else {
-          newStarredIds.add(messageId);
-        }
-        
-        console.log(`[STORE] ${isCurrentlyStarred ? 'Unstarring' : 'Starring'} message ${messageId}`);
-        
-        // Update the actual message objects
-        const newMessages = new Map(state.messages);
-        let messageFound = false;
-        
-        for (const [convId, msgs] of newMessages.entries()) {
-          const updatedMsgs = msgs.map(msg => {
-            if (msg.id === messageId) {
-              messageFound = true;
-              return { ...msg, starred: !isCurrentlyStarred };
-            }
-            return msg;
-          });
-          if (messageFound) {
-            newMessages.set(convId, updatedMsgs);
-            break; // Exit early since we found the message
-          }
-        }
-        
-        // Save to localStorage asynchronously to prevent blocking
-        setTimeout(() => {
-          saveStarredMessagesToStorage(newStarredIds);
-        }, 0);
-        
-        return { 
-          starredMessageIds: newStarredIds,
-          messages: newMessages
-        };
-      }),
-      
-      loadStarredMessages: () => {
+      const updateConversationsList = (
+        jid: string,
+        lastMessage: string,
+        timestamp: Date,
+        incrementUnread: boolean = false,
+        getContactName: (userId: string, currentUserId?: string) => string,
+        currentUserId?: string
+      ) => {
         const state = get();
-        const starredIds = loadStarredMessagesFromStorage();
-        
-        // Only update if the starred IDs have actually changed
-        const currentIds = state.starredMessageIds;
-        const idsChanged = starredIds.size !== currentIds.size || 
-          Array.from(starredIds).some(id => !currentIds.has(id));
-        
-        if (!idsChanged) {
-          console.log('[STORE] Starred IDs unchanged, skipping update');
+        const userId = jid.split("@")[0];
+        const existingConv = state.conversations.find(
+          (conv) => conv.jid === jid
+        );
+        const isRead = state.readConversations.includes(jid);
+
+        if (existingConv) {
+          state.updateConversation(jid, {
+            lastMessage,
+            lastMessageTime: ensureDate(timestamp),
+            unreadCount: isRead
+              ? 0
+              : incrementUnread
+              ? existingConv.unreadCount + 1
+              : existingConv.unreadCount,
+            name: getContactName(userId, currentUserId),
+          });
+        } else {
+          state.addConversation({
+            jid,
+            name: getContactName(userId, currentUserId),
+            lastMessage,
+            lastMessageTime: ensureDate(timestamp),
+            unreadCount: isRead ? 0 : incrementUnread ? 1 : 0,
+            type: "CHAT",
+          });
+        }
+      };
+
+      const fetchConversationsFromAPI = async (
+        currentUser: User | null,
+        accessToken: string | null,
+        getContactName: (userId: string, currentUserId?: string) => string
+      ) => {
+        if (!API_HOST || !currentUser) return;
+
+        try {
+          const response = await axios.get(
+            `${API_HOST}/users/${currentUser.id}`,
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            }
+          );
+
+          if (response.data?.chats?.results) {
+            const messages = response.data.chats.results;
+            const conversationMap: { [jid: string]: Conversation } = {};
+
+            messages.forEach((msg: any) => {
+              const jid = msg.bare_peer;
+              if (!isValidBareJid(jid)) return;
+
+              const isRead = get().readConversations.includes(jid);
+
+              const timestampValue =
+                msg.created_at ||
+                (msg.timestamp ? msg.timestamp * 1000 : Date.now());
+              const timestamp = new Date(timestampValue);
+              const lastMessage = msg.txt || "";
+              const isOwn = msg.xml?.includes(`from='${currentUser?.jid}`);
+              const isGroup = msg.is_group || false;
+              const userId = jid.split("@")[0];
+
+              if (
+                !conversationMap[jid] ||
+                conversationMap[jid].lastMessageTime < timestamp
+              ) {
+                conversationMap[jid] = {
+                  jid,
+                  name: getContactName(userId, currentUser?.id),
+                  avatar: msg.avatar,
+                  lastMessage: isOwn ? `You: ${lastMessage}` : lastMessage,
+                  lastMessageTime: timestamp,
+                  unreadCount: isRead
+                    ? 0
+                    : conversationMap[jid]?.unreadCount + 1 || 1,
+                  isOnline: msg.state?.String === "active",
+                  type: isGroup ? "GROUP" : "CHAT",
+                  members: isGroup
+                    ? msg.members?.map((m: any) => ({
+                        id: m.id,
+                        name: getContactName(m.id, currentUser?.id),
+                        avatar: m.avatar,
+                        phoneNumber: m.phone_number,
+                        lastSeen: m.last_seen,
+                      }))
+                    : [
+                        {
+                          id: userId,
+                          name: getContactName(userId, currentUser?.id),
+                          avatar: msg.avatar,
+                        },
+                      ],
+                };
+              }
+            });
+
+            const updatedConversations = Object.values(conversationMap).sort(
+              (a, b) =>
+                b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
+            );
+            set({ conversations: updatedConversations });
+
+            const apiMessages: Message[] = messages.map((msg: any) => {
+              let from = msg.bare_peer;
+              let to = currentUser?.jid || "";
+              if (msg.xml?.includes(`from='${currentUser?.jid}`)) {
+                from = currentUser?.jid || "";
+                to = msg.bare_peer;
+              }
+              return {
+                id: msg.origin_id || uuidv4(),
+                from: from.split("/")[0],
+                to: to.split("/")[0],
+                text: msg.txt || "",
+                timestamp: ensureDate(msg.created_at || msg.timestamp * 1000),
+                isOwn: msg.xml?.includes(`from='${currentUser?.jid}`),
+              };
+            });
+
+            set((state) => {
+              const updatedMessages = [...state.messages, ...apiMessages]
+                .filter(
+                  (msg, index, self) =>
+                    index ===
+                    self.findIndex(
+                      (m) =>
+                        m.text === msg.text &&
+                        Math.abs(
+                          m.timestamp.getTime() - msg.timestamp.getTime()
+                        ) < 1000
+                    )
+                )
+                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+              return { messages: updatedMessages };
+            });
+          }
+        } catch (error) {
+          console.error("Failed to fetch conversations from API:", error);
+          set({ connectionError: "Failed to fetch conversations" });
+        }
+      };
+
+      const fetchRecentMessagesMAM = (
+        mamNS = "urn:xmpp:mam:2",
+        currentUser: User | null,
+        getContactName: (userId: string, currentUserId?: string) => string
+      ) => {
+        if (!xmppClient.isConnected()) return;
+
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+
+        const iq = $iq({ type: "set", id: uuidv4() })
+          .c("query", { xmlns: mamNS })
+          .c("x", { xmlns: "jabber:x:data", type: "submit" })
+          .c("field", { var: "FORM_TYPE", type: "hidden" })
+          .c("value")
+          .t(mamNS)
+          .up()
+          .up()
+          .c("field", { var: "start" })
+          .c("value")
+          .t(startDate.toISOString())
+          .up()
+          .up()
+          .c("set", { xmlns: "http://jabber.org/protocol/rsm" })
+          .c("max")
+          .t("50");
+
+        xmppClient.sendIQ(
+          iq,
+          (response: any) => {
+            const rsm = response.getElementsByTagName("set")[0];
+            const complete = response.getAttribute("complete") === "true";
+            if (rsm && !complete) {
+              const last = rsm.getElementsByTagName("last")[0];
+              if (last) {
+                fetchRecentMessagesMAMNext(
+                  last.textContent,
+                  mamNS,
+                  currentUser,
+                  getContactName
+                );
+              }
+            }
+          },
+          (error: any) => {
+            console.error("MAM recent messages query failed:", error);
+            if (
+              error.getAttribute("condition") === "improper-addressing" &&
+              mamNS === "urn:xmpp:mam:2"
+            ) {
+              fetchRecentMessagesMAM(
+                "urn:xmpp:mam:1",
+                currentUser,
+                getContactName
+              );
+            } else {
+              set({
+                connectionError: `Failed to fetch recent messages: ${
+                  error.getAttribute("condition") || "unknown"
+                }`,
+              });
+            }
+          }
+        );
+      };
+
+      const fetchRecentMessagesMAMNext = (
+        lastId: string,
+        mamNS: string,
+        currentUser: User | null,
+        getContactName: (userId: string, currentUserId?: string) => string
+      ) => {
+        if (!xmppClient.isConnected()) return;
+
+        const iq = $iq({ type: "set", id: uuidv4() })
+          .c("query", { xmlns: mamNS })
+          .c("x", { xmlns: "jabber:x:data", type: "submit" })
+          .c("field", { var: "FORM_TYPE", type: "hidden" })
+          .c("value")
+          .t(mamNS)
+          .up()
+          .up()
+          .c("set", { xmlns: "http://jabber.org/protocol/rsm" })
+          .c("max")
+          .t("50")
+          .up()
+          .c("after")
+          .t(lastId);
+
+        xmppClient.sendIQ(
+          iq,
+          (response: any) => {
+            const rsm = response.getElementsByTagName("set")[0];
+            const complete = response.getAttribute("complete") === "true";
+            if (rsm && !complete) {
+              const last = rsm.getElementsByTagName("last")[0];
+              if (last) {
+                fetchRecentMessagesMAMNext(
+                  last.textContent,
+                  mamNS,
+                  currentUser,
+                  getContactName
+                );
+              }
+            }
+          },
+          (error: any) => {
+            console.error("MAM next page query failed:", error);
+          }
+        );
+      };
+
+      const fetchRosterContacts = (
+        currentUser: User | null,
+        getContactName: (userId: string, currentUserId?: string) => string
+      ) => {
+        if (!xmppClient.isConnected()) return;
+
+        const iq = $iq({ type: "get", id: uuidv4() }).c("query", {
+          xmlns: "jabber:iq:roster",
+        });
+
+        xmppClient.sendIQ(
+          iq,
+          (response: any) => {
+            const items = response.getElementsByTagName("item");
+            for (let i = 0; i < items.length; i++) {
+              const jid = items[i].getAttribute("jid");
+              const userId = jid.split("@")[0];
+              if (!get().conversations.some((conv) => conv.jid === jid)) {
+                get().addConversation({
+                  jid,
+                  name: getContactName(userId, currentUser?.id),
+                  lastMessage: `Contact: ${getContactName(
+                    userId,
+                    currentUser?.id
+                  )}`,
+                  lastMessageTime: new Date(),
+                  unreadCount: 0,
+                  type: "CHAT",
+                  members: [
+                    {
+                      id: userId,
+                      name: getContactName(userId, currentUser?.id),
+                    },
+                  ],
+                });
+              }
+            }
+          },
+          (error: any) => {
+            console.error("Roster fetch failed:", error);
+          }
+        );
+      };
+
+      const fetchMessageHistory = async (
+        withJid: string,
+        currentUser: User | null,
+        getContactName: (userId: string, currentUserId?: string) => string
+      ) => {
+        if (!xmppClient.isConnected() || !currentUser) return;
+        if (!isValidBareJid(withJid)) {
+          set({ connectionError: `Invalid JID format: ${withJid}` });
           return;
         }
-        
-        console.log('[STORE] Loading starred messages from storage, count:', starredIds.size);
-        
-        // Update message objects to reflect loaded starred status
-        const newMessages = new Map(state.messages);
-        let messagesChanged = false;
-        
-        for (const [convId, msgs] of newMessages.entries()) {
-          const updatedMsgs = msgs.map(msg => {
-            const shouldBeStarred = starredIds.has(msg.id);
-            if (msg.starred !== shouldBeStarred) {
-              messagesChanged = true;
-              return { ...msg, starred: shouldBeStarred };
+
+        await Promise.allSettled([
+          new Promise((resolve) => {
+            fetchMessageHistoryMAM(
+              withJid,
+              "urn:xmpp:mam:2",
+              currentUser,
+              getContactName
+            );
+            resolve(null);
+          }),
+          fetchMessageHistoryAPI(withJid, currentUser),
+        ]);
+      };
+
+      const fetchMessageHistoryMAM = (
+        withJid: string,
+        mamNS = "urn:xmpp:mam:2",
+        currentUser: User | null,
+        getContactName: (userId: string, currentUserId?: string) => string
+      ) => {
+        if (!xmppClient.isConnected()) return;
+
+        const iq = $iq({ type: "set", id: uuidv4() })
+          .c("query", { xmlns: mamNS })
+          .c("x", { xmlns: "jabber:x:data", type: "submit" })
+          .c("field", { var: "FORM_TYPE", type: "hidden" })
+          .c("value")
+          .t(mamNS)
+          .up()
+          .up()
+          .c("field", { var: "with" })
+          .c("value")
+          .t(withJid)
+          .up()
+          .up()
+          .c("set", { xmlns: "http://jabber.org/protocol/rsm" })
+          .c("max")
+          .t("50");
+
+        xmppClient.sendIQ(
+          iq,
+          (response: any) => {
+            const rsm = response.getElementsByTagName("set")[0];
+            const complete = response.getAttribute("complete") === "true";
+            if (rsm && !complete) {
+              const last = rsm.getElementsByTagName("last")[0];
+              if (last) {
+                fetchMessageHistoryMAMNext(
+                  withJid,
+                  last.textContent,
+                  mamNS,
+                  currentUser,
+                  getContactName
+                );
+              }
             }
-            return msg;
-          });
-          newMessages.set(convId, updatedMsgs);
-        }
-        
-        // Only update state if something actually changed
-        if (idsChanged || messagesChanged) {
-          set({ 
-            starredMessageIds: starredIds,
-            ...(messagesChanged ? { messages: newMessages } : {})
-          });
-        }
-      },
-      
-      saveStarredMessages: () => {
-        try {
-          const state = get();
-          console.log('[STORE] Saving starred messages to localStorage, count:', state.starredMessageIds.size);
-          saveStarredMessagesToStorage(state.starredMessageIds);
-        } catch (error) {
-          console.error('[STORE] Failed to save starred messages:', error);
-        }
-      },
-
-      // UI actions
-      setMessageInput: (input) => set({ messageInput: input }),
-      setSearchQuery: (query) => set({ searchQuery: query }),
-      setTypingUsers: (users) => set({ typingUsers: users }),
-      updateConversationTyping: (conversationId, userId, isTyping) => set((state) => {
-        const newMap = new Map(state.conversationTypingUsers);
-        const convTypingUsers = newMap.get(conversationId) || new Set();
-        
-        if (isTyping) {
-          convTypingUsers.add(userId);
-        } else {
-          convTypingUsers.delete(userId);
-        }
-        
-        newMap.set(conversationId, convTypingUsers);
-        return { conversationTypingUsers: newMap };
-      }),
-
-      // Toast actions
-      showToast: (message, type = "info") => set((state) => {
-        const id = Date.now().toString();
-        const newToast: ToastMessage = { id, message, type };
-        return { toasts: [...state.toasts, newToast] };
-      }),
-      removeToast: (id) => set((state) => ({
-        toasts: state.toasts.filter(toast => toast.id !== id)
-      })),
-
-      // Modal actions
-      setShowNewChatModal: (show) => set({ showNewChatModal: show }),
-      setShowGroupInfoModal: (show) => set({ showGroupInfoModal: show }),
-      setShowAddMembersModal: (show) => set({ showAddMembersModal: show }),
-      setShowEmojiPicker: (show) => set({ showEmojiPicker: show }),
-      setShowWalletModal: (show) => set({ showWalletModal: show }),
-      setShowUserInfoModal: (show) => set({ showUserInfoModal: show }),
-
-      // Form actions
-      setNewChatType: (type) => set({ newChatType: type }),
-      setDirectChatUserId: (userId) => set({ directChatUserId: userId }),
-      setGroupChatName: (name) => set({ groupChatName: name }),
-      setGroupChatMembers: (members) => set({ groupChatMembers: members }),
-      setAddMembersInput: (input) => set({ addMembersInput: input }),
-
-      // Helper actions
-      getContactName: (userId, currentUserId) => {
-        const state = get();
-        if (userId === currentUserId) return "You";
-        
-        const contact = state.contactsMap.get(userId);
-        if (contact?.name) return contact.name;
-        
-        const alternativeContact = state.contacts.find(c => 
-          c.contact_id === userId || c.id === userId || c.user_id === userId
+          },
+          (error: any) => {
+            if (
+              error.getAttribute("condition") === "improper-addressing" &&
+              mamNS === "urn:xmpp:mam:2"
+            ) {
+              fetchMessageHistoryMAM(
+                withJid,
+                "urn:xmpp:mam:1",
+                currentUser,
+                getContactName
+              );
+            } else {
+              set({
+                connectionError: `Failed to fetch message history: ${
+                  error.getAttribute("condition") || "unknown"
+                }`,
+              });
+            }
+          }
         );
-        
-        if (alternativeContact) return alternativeContact.name;
-        return `User ${userId.slice(-6)}`;
-      },
+      };
 
-      getContactAvatar: (userId) => {
-        const state = get();
-        const contact = state.contactsMap.get(userId);
-        if (contact?.contact?.profile_picture) {
-          return contact.contact.profile_picture;
-        }
-        
-        // Return null when no profile picture is available
-        // This allows the UI to show initials instead
-        return null;
-      },
+      const fetchMessageHistoryMAMNext = (
+        withJid: string,
+        lastId: string,
+        mamNS: string,
+        currentUser: User | null,
+        getContactName: (userId: string, currentUserId?: string) => string
+      ) => {
+        if (!xmppClient.isConnected()) return;
 
-      getConversationDisplayName: (conversation, currentUserId) => {
-        const state = get();
-        
-        if (conversation.type === "GROUP") {
-          return conversation.name || "Group Chat";
-        }
-        
-        // For DIRECT conversations, find the OTHER user
-        if (conversation.members && conversation.members.length > 0) {
-          const otherMember = conversation.members.find(member => member.id !== currentUserId);
-          if (otherMember) {
-            return state.getContactName(otherMember.id, currentUserId);
+        const iq = $iq({ type: "set", id: uuidv4() })
+          .c("query", { xmlns: mamNS })
+          .c("x", { xmlns: "jabber:x:data", type: "submit" })
+          .c("field", { var: "FORM_TYPE", type: "hidden" })
+          .c("value")
+          .t(mamNS)
+          .up()
+          .up()
+          .c("field", { var: "with" })
+          .c("value")
+          .t(withJid)
+          .up()
+          .up()
+          .c("set", { xmlns: "http://jabber.org/protocol/rsm" })
+          .c("max")
+          .t("50")
+          .up()
+          .c("after")
+          .t(lastId);
+
+        xmppClient.sendIQ(
+          iq,
+          (response: any) => {
+            const rsm = response.getElementsByTagName("set")[0];
+            const complete = response.getAttribute("complete") === "true";
+            if (rsm && !complete) {
+              const last = rsm.getElementsByTagName("last")[0];
+              if (last) {
+                fetchMessageHistoryMAMNext(
+                  withJid,
+                  last.textContent,
+                  mamNS,
+                  currentUser,
+                  getContactName
+                );
+              }
+            }
+          },
+          (error: any) => {
+            console.error("MAM history next page query failed:", error);
           }
-        }
-        
-        if (conversation.participants && conversation.participants.length > 0) {
-          const otherParticipant = conversation.participants.find(id => id !== currentUserId);
-          if (otherParticipant) {
-            return state.getContactName(otherParticipant, currentUserId);
-          }
-        }
-        
-        return "Direct Chat";
-      },
+        );
+      };
 
-      getFilteredConversations: () => {
-        const state = get();
-        switch (state.currentTab) {
-          case "unread":
-            return state.conversations.filter(conv => conv.unreadCount && conv.unreadCount > 0);
-          case "groups":
-            return state.conversations.filter(conv => conv.type === "GROUP");
-          case "archived":
-            return state.archivedConversations;
-          default:
-            return state.conversations;
+      const fetchMessageHistoryAPI = async (
+        withJid: string,
+        currentUser: User | null
+      ) => {
+        if (!currentUser || !API_HOST) return;
+
+        try {
+          const response = await axios.get(
+            `${API_HOST}/user/${currentUser.id}/${withJid.split("@")[0]}`,
+            {
+              headers: { Authorization: `Bearer ${get().accessToken}` },
+            }
+          );
+
+          if (response.data?.messages) {
+            const apiMessages: Message[] = response.data.messages.map(
+              (msg: any) => ({
+                id: msg.id || uuidv4(),
+                from: msg.from,
+                to: msg.to,
+                text: msg.body || msg.text,
+                timestamp: ensureDate(msg.timestamp),
+                isOwn: msg.from === currentUser.jid,
+              })
+            );
+
+            set((state) => ({
+              messages: [...state.messages, ...apiMessages]
+                .filter(
+                  (msg, index, self) =>
+                    index ===
+                    self.findIndex(
+                      (m) =>
+                        m.text === msg.text &&
+                        Math.abs(
+                          m.timestamp.getTime() - msg.timestamp.getTime()
+                        ) < 1000
+                    )
+                )
+                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
+            }));
+          }
+        } catch (error) {
+          console.error("Failed to fetch message history from API:", error);
         }
-      },
-    }),
+      };
+
+      return {
+        conversations: [],
+        readConversations: [],
+        messages: [],
+        connected: false,
+        connectionStatus: "Disconnected",
+        connectionError: null,
+        currentConversationDetails: null,
+        activeConversation: "",
+        accessToken: null,
+        setConversations: (conversations) =>
+          set({
+            conversations: conversations.map((conv) => ({
+              ...conv,
+              lastMessageTime: ensureDate(conv.lastMessageTime),
+              starred: conv.starred ?? false,
+            })),
+          }),
+        updateConversation: (jid, updates) =>
+          set((state) => ({
+            conversations: state.conversations.map((conv) =>
+              conv.jid === jid
+                ? {
+                    ...conv,
+                    ...updates,
+                    lastMessageTime: ensureDate(
+                      updates.lastMessageTime || conv.lastMessageTime
+                    ),
+                  }
+                : conv
+            ),
+          })),
+        addConversation: (conversation) =>
+          set((state) => ({
+            conversations: [
+              {
+                ...conversation,
+                lastMessageTime: ensureDate(conversation.lastMessageTime),
+                starred: conversation.starred ?? false,
+              },
+              ...state.conversations,
+            ].sort(
+              (a, b) =>
+                b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
+            ),
+          })),
+        removeConversation: (jid) =>
+          set((state) => ({
+            conversations: state.conversations.filter(
+              (conv) => conv.jid !== jid
+            ),
+          })),
+        markConversationAsRead: (jid) =>
+          set((state) => ({
+            readConversations: [...new Set([...state.readConversations, jid])],
+            conversations: state.conversations.map((conv) =>
+              conv.jid === jid ? { ...conv, unreadCount: 0 } : conv
+            ),
+          })),
+        toggleStarredConversation: (jid) =>
+          set((state) => ({
+            conversations: state.conversations.map((conv) =>
+              conv.jid === jid ? { ...conv, starred: !conv.starred } : conv
+            ),
+          })),
+        clearConversations: () =>
+          set({ conversations: [], readConversations: [], messages: [] }),
+        initializeConnection: (
+          user: User | null,
+          accessToken: string | null,
+          getContactName: (userId: string, currentUserId?: string) => string
+        ) => {
+          if (!DOMAIN || !user || !accessToken) {
+            set({
+              connectionError: "Missing XMPP configuration or user data",
+              connectionStatus: "Disconnected",
+            });
+            return;
+          }
+
+          set({ accessToken });
+
+          xmppClient.connect(user.jid, user.id, (status) => {
+            if (status === Strophe.Status.CONNECTING) {
+              set({ connectionStatus: "Connecting...", connectionError: null });
+            } else if (status === Strophe.Status.CONNFAIL) {
+              set({
+                connectionStatus: "Connection failed",
+                connectionError: "Failed to connect. Retrying...",
+                connected: false,
+              });
+              if (connectionAttempts < maxConnectionAttempts) {
+                setTimeout(() => {
+                  connectionAttempts++;
+                  xmppClient.connect(user.jid, user.id, this);
+                }, 3000);
+              } else {
+                set({
+                  connectionError: "Failed to connect after multiple attempts.",
+                  connectionStatus: "Disconnected",
+                });
+              }
+            } else if (status === Strophe.Status.DISCONNECTING) {
+              set({ connectionStatus: "Disconnecting..." });
+            } else if (status === Strophe.Status.DISCONNECTED) {
+              set({ connectionStatus: "Disconnected", connected: false });
+            } else if (status === Strophe.Status.CONNECTED) {
+              set({
+                connectionStatus: "Connected",
+                connectionError: null,
+                connected: true,
+              });
+              xmppClient.setConnected(true);
+              xmppClient.send($pres().tree());
+
+              xmppClient.addMessageHandler((msg: any) => {
+                const from = msg.getAttribute("from");
+                const type = msg.getAttribute("type");
+                const body = msg.getElementsByTagName("body")[0];
+
+                if (type === "chat" && body) {
+                  const text = Strophe.getText(body);
+                  const fromJid = from.split("/")[0];
+                  const newMessage: Message = {
+                    id: uuidv4(),
+                    from: fromJid,
+                    to: user?.jid || "",
+                    text,
+                    timestamp: new Date(),
+                    isOwn: fromJid === user?.jid,
+                  };
+
+                  set((state) => ({
+                    messages: [...state.messages, newMessage],
+                  }));
+                  updateConversationsList(
+                    fromJid,
+                    text,
+                    new Date(),
+                    fromJid !== get().activeConversation &&
+                      !get().readConversations.includes(fromJid),
+                    getContactName,
+                    user?.id
+                  );
+                }
+                return true;
+              });
+
+              xmppClient.addMAMHandler((msg: any) => {
+                const result = msg.getElementsByTagName("result")[0];
+                if (result) {
+                  const forwarded = result.getElementsByTagName("forwarded")[0];
+                  if (forwarded) {
+                    const message =
+                      forwarded.getElementsByTagName("message")[0];
+                    const body = message?.getElementsByTagName("body")[0];
+                    if (body) {
+                      const from = message.getAttribute("from");
+                      const to = message.getAttribute("to");
+                      const text = Strophe.getText(body);
+                      const delay = forwarded.getElementsByTagName("delay")[0];
+                      const timestamp = ensureDate(
+                        delay ? delay.getAttribute("stamp") : new Date()
+                      );
+                      const otherJid =
+                        from.split("/")[0] === user?.jid
+                          ? to.split("/")[0]
+                          : from.split("/")[0];
+
+                      const historicalMessage: Message = {
+                        id: uuidv4(),
+                        from: from.split("/")[0],
+                        to: to.split("/")[0],
+                        text,
+                        timestamp,
+                        isOwn: from.split("/")[0] === user?.jid,
+                      };
+
+                      set((state) => ({
+                        messages: [...state.messages, historicalMessage]
+                          .filter(
+                            (msg, index, self) =>
+                              index ===
+                              self.findIndex(
+                                (m) =>
+                                  m.text === msg.text &&
+                                  Math.abs(
+                                    m.timestamp.getTime() -
+                                      msg.timestamp.getTime()
+                                  ) < 1000
+                              )
+                          )
+                          .sort(
+                            (a, b) =>
+                              a.timestamp.getTime() - b.timestamp.getTime()
+                          ),
+                      }));
+
+                      updateConversationsList(
+                        otherJid,
+                        text,
+                        timestamp,
+                        otherJid !== get().activeConversation &&
+                          !get().readConversations.includes(otherJid),
+                        getContactName,
+                        user?.id
+                      );
+                    }
+                  }
+                }
+                return true;
+              });
+
+              Promise.allSettled([
+                fetchConversationsFromAPI(user, accessToken, getContactName),
+                fetchRecentMessagesMAM("urn:xmpp:mam:2", user, getContactName),
+                fetchRosterContacts(user, getContactName),
+              ]).catch((error) => {
+                console.error("Error fetching conversations:", error);
+                set({ connectionError: "Failed to fetch conversations" });
+              });
+            }
+          });
+        },
+        disconnect: () => {
+          xmppClient.removeHandlers();
+          xmppClient.disconnect();
+          set({
+            connected: false,
+            connectionStatus: "Disconnected",
+            connectionError: null,
+          });
+        },
+        sendMessage: (
+          recipientJid: string,
+          messageText: string,
+          currentUser: User | null
+        ) => {
+          if (
+            !xmppClient.isConnected() ||
+            !messageText.trim() ||
+            !recipientJid.trim() ||
+            !currentUser
+          )
+            return;
+
+          xmppClient.sendMessage(recipientJid, messageText);
+          const newMessage: Message = {
+            id: uuidv4(),
+            from: currentUser.jid,
+            to: recipientJid,
+            text: messageText,
+            timestamp: new Date(),
+            isOwn: true,
+          };
+
+          set((state) => ({
+            messages: [...state.messages, newMessage],
+          }));
+          updateConversationsList(
+            recipientJid,
+            messageText,
+            new Date(),
+            false,
+            getContactName,
+            currentUser.id
+          );
+        },
+        fetchConversationDetails: async (
+          jid: string,
+          getContactName: (userId: string, currentUserId?: string) => string
+        ) => {
+          if (!API_HOST) return;
+
+          const userId = jid.split("@")[0];
+          try {
+            const response = await axios.get(`${API_HOST}/users/${userId}`, {
+              headers: { Authorization: `Bearer ${get().accessToken}` },
+            });
+            const data = response.data;
+            const isGroup = data.is_group || false;
+            set({
+              currentConversationDetails: {
+                jid,
+                name: getContactName(userId, get().currentUser?.id),
+                avatar: data.avatar || getDummyAvatar(jid),
+                type: isGroup ? "GROUP" : "CHAT",
+                members: isGroup
+                  ? data.members?.map((m: any) => ({
+                      id: m.id,
+                      name: getContactName(m.id, get().currentUser?.id),
+                      avatar: m.avatar || getDummyAvatar(m.id),
+                      phoneNumber: m.phone_number,
+                      lastSeen: m.last_seen,
+                    }))
+                  : [
+                      {
+                        id: userId,
+                        name: getContactName(userId, get().currentUser?.id),
+                        avatar: data.avatar || getDummyAvatar(jid),
+                        phoneNumber: data.phone_number || "+254712345678",
+                        lastSeen: data.last_seen,
+                      },
+                    ],
+                lastMessage: "",
+                lastMessageTime: new Date(),
+                unreadCount: 0,
+              },
+            });
+          } catch (error) {
+            console.error("Failed to fetch conversation details:", error);
+            set({
+              currentConversationDetails: {
+                jid,
+                name: getContactName(userId, get().currentUser?.id),
+                avatar: getDummyAvatar(jid),
+                type: "CHAT",
+                members: [
+                  {
+                    id: userId,
+                    name: getContactName(userId, get().currentUser?.id),
+                    avatar: getDummyAvatar(jid),
+                  },
+                ],
+                lastMessage: "",
+                lastMessageTime: new Date(),
+                unreadCount: 0,
+              },
+            });
+          }
+        },
+        startConversation: (
+          jid: string,
+          getContactName: (userId: string, currentUserId?: string) => string
+        ) => {
+          if (!isValidBareJid(jid)) {
+            set({ connectionError: `Invalid JID format: ${jid}` });
+            return;
+          }
+
+          const state = get();
+          const userId = jid.split("@")[0];
+          if (!state.conversations.some((conv) => conv.jid === jid)) {
+            state.addConversation({
+              jid,
+              name: getContactName(userId, state.currentUser?.id),
+              lastMessage: "No messages yet",
+              lastMessageTime: new Date(),
+              unreadCount: 0,
+              type: "CHAT",
+              members: [
+                {
+                  id: userId,
+                  name: getContactName(userId, state.currentUser?.id),
+                  avatar: getDummyAvatar(jid),
+                },
+              ],
+            });
+          }
+
+          set({ activeConversation: jid });
+          state.markConversationAsRead(jid);
+          fetchMessageHistory(jid, state.currentUser, getContactName);
+          state.fetchConversationDetails(jid, getContactName);
+        },
+      };
+    },
     {
-      name: 'chat-store',
+      name: "chat-storage",
+      partialize: (state) => ({
+        conversations: state.conversations,
+        readConversations: state.readConversations,
+        messages: state.messages,
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.messages = state.messages.map((msg) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp),
+          }));
+          state.conversations = state.conversations.map((conv) => ({
+            ...conv,
+            lastMessageTime: new Date(conv.lastMessageTime),
+          }));
+        }
+      },
     }
   )
 );
+
+const getDummyAvatar = (id: string) => {
+  const avatars = [
+    "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face",
+    "https://images.unsplash.com/photo-1494790108755-2616b69fc7c9?w=40&h=40&fit=crop&crop=face",
+    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face",
+    "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=40&h=40&fit=crop&crop=face",
+    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=40&h=40&fit=crop&crop=face",
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=40&h=40&fit=crop&crop=face",
+  ];
+  const hash = id
+    .split("")
+    .reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) & a, 0);
+  return avatars[Math.abs(hash) % avatars.length];
+};

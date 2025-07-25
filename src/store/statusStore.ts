@@ -53,7 +53,8 @@ export const useStatusStore = create<StatusState>()(
       isLoadingStatuses: false,
       error: null,
       setStatusUsers: (statusUsers) => set({ statusUsers }),
-      setIsLoadingStatuses: (isLoading) => set({ isLoadingStatuses: isLoading }),
+      setIsLoadingStatuses: (isLoading) =>
+        set({ isLoadingStatuses: isLoading }),
       setError: (error) => set({ error }),
       fetchStatuses: async () => {
         set({ isLoadingStatuses: true, error: null });
@@ -114,14 +115,16 @@ export const useStatusStore = create<StatusState>()(
             mappedStatuses.push(
               {
                 id: "dummy1",
-                name: getContactName("dummy1", user?.id) || "John Doe",
+                name: getContactName("Liam Anderson", user?.id) || "John Doe",
                 avatar: contacts[0]?.avatar,
                 statuses: [
                   {
                     id: "dummy1-status1",
-                    type: "text",
-                    content: "Hello World!",
-                    backgroundColor: "#3B82F6",
+                    type: "image",
+                    content: "",
+
+                    imageUrl:
+                      "https://plus.unsplash.com/premium_photo-1706026591626-c54429307230?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
                     textColor: "#FFFFFF",
                     font: "font-sans",
                     timestamp: new Date().toISOString(),
@@ -132,14 +135,15 @@ export const useStatusStore = create<StatusState>()(
               },
               {
                 id: "dummy2",
-                name: getContactName("dummy2", user?.id) || "Jane Smith",
+                name: getContactName("Liam Anderson", user?.id) || "Jane Smith",
                 avatar: contacts[1]?.avatar,
                 statuses: [
                   {
                     id: "dummy2-status1",
                     type: "image",
                     content: "",
-                    imageUrl: "https://via.placeholder.com/400",
+                    imageUrl:
+                      "https://images.unsplash.com/photo-1682687982423-295485af248a?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDF8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
                     timestamp: new Date().toISOString(),
                     views: 0,
                     isViewed: false,
@@ -160,14 +164,16 @@ export const useStatusStore = create<StatusState>()(
             statusUsers: [
               {
                 id: "dummy1",
-                name: getContactName("dummy1", user?.id) || "John Doe",
+                name: getContactName("Liam Anderson", user?.id) || "John Doe",
                 avatar: contacts[0]?.avatar,
                 statuses: [
                   {
                     id: "dummy1-status1",
-                    type: "text",
-                    content: "Hello World!",
-                    backgroundColor: "#3B82F6",
+                    type: "image",
+                    content: "",
+
+                    imageUrl:
+                      "https://plus.unsplash.com/premium_photo-1706026591626-c54429307230?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
                     textColor: "#FFFFFF",
                     font: "font-sans",
                     timestamp: new Date().toISOString(),
@@ -178,20 +184,21 @@ export const useStatusStore = create<StatusState>()(
               },
               {
                 id: "dummy2",
-                name: getContactName("dummy2", user?.id) || "Jane Smith",
+                name: getContactName("Liam Anderson", user?.id) || "Jane Smith",
                 avatar: contacts[1]?.avatar,
                 statuses: [
                   {
                     id: "dummy2-status1",
                     type: "image",
                     content: "",
-                    imageUrl: "https://via.placeholder.com/400",
+                    imageUrl:
+                      "https://images.unsplash.com/photo-1682687982423-295485af248a?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDF8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
                     timestamp: new Date().toISOString(),
                     views: 0,
                     isViewed: false,
                   },
                 ],
-              },
+              }
             ],
           });
         }
@@ -207,7 +214,10 @@ export const useStatusStore = create<StatusState>()(
           formData.append("type", statusData.type);
           if (statusData.type === "text") {
             formData.append("content", statusData.content);
-            formData.append("backgroundColor", statusData.backgroundColor || "#3B82F6");
+            formData.append(
+              "backgroundColor",
+              statusData.backgroundColor || "#3B82F6"
+            );
             formData.append("textColor", statusData.textColor || "#FFFFFF");
             formData.append("font", statusData.font || "font-sans");
           } else if (statusData.image) {

@@ -5,7 +5,6 @@ export { default as MessageList } from './MessageList';
 export { default as ChatHeader } from './ChatHeader';
 export { default as NewChatModal } from './NewChatModal';
 export { default as RoomList } from '../components/RoomsList';
-export { default as XMPPClient } from '../../../lib/stanza/xmppClient';
 
 // Export shared types
 export interface Message {

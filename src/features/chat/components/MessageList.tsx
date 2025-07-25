@@ -25,7 +25,6 @@ const MessageList: React.FC<MessageListProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom only within the messages container
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop =
@@ -33,18 +32,18 @@ const MessageList: React.FC<MessageListProps> = ({
     }
   }, [messages]);
 
-  // Group messages by date
   const groupMessagesByDate = (messages: Message[]) => {
     const groups: { [key: string]: Message[] } = {};
-
     messages.forEach((message) => {
-      const date = message.timestamp.toDateString();
+      const date =
+        message.timestamp instanceof Date && !isNaN(message.timestamp.getTime())
+          ? message.timestamp.toDateString()
+          : "Unknown";
       if (!groups[date]) {
         groups[date] = [];
       }
       groups[date].push(message);
     });
-
     return groups;
   };
 
@@ -69,12 +68,8 @@ const MessageList: React.FC<MessageListProps> = ({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-60 h-60  flex items-center justify-center mx-auto mb-4">
-            <img
-              src="/empty1.svg"
-              alt="Group Avatar"
-              className="w-full h-full"
-            />
+          <div className="w-60 h-60 flex items-center justify-center mx-auto mb-4">
+            <img src="/empty1.svg" alt="Group Avatar" className="w-full h-full" />
           </div>
         </div>
       </div>
@@ -169,10 +164,13 @@ const MessageList: React.FC<MessageListProps> = ({
                               : "text-gray-500 text-left"
                           }`}
                         >
-                          {message.timestamp.toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {message.timestamp instanceof Date &&
+                          !isNaN(message.timestamp.getTime())
+                            ? message.timestamp.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "Unknown time"}
                         </div>
                       )}
                     </div>

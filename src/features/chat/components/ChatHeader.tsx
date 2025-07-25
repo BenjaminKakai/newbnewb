@@ -50,7 +50,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const displayAvatar = contactAvatar; // Use contact avatar if available
 
   return (
-    <div className="bg-gray-100 dark:bg-[var(--background)] border-b border-gray-200 px-6 py-4">
+    <div className="bg-gray-100 dark:bg-[var(--background)] shaow-lg px-6 py-4">
       <div className="flex items-center justify-between">
         <div
           className="flex items-center space-x-3 cursor-pointer"

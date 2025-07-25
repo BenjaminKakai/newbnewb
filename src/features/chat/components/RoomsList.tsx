@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useContactsStore } from "@/store/contactsStore";
 import { useSocket } from "@/services/notificationSocket";
@@ -20,6 +19,7 @@ interface Conversation {
   lastMessageTime: Date;
   unreadCount: number;
   isOnline?: boolean;
+  starred?: boolean;
 }
 
 interface Notification {
@@ -44,16 +44,19 @@ interface Notification {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
-  template: { id: string; template_code: string; title: string; language: string };
+  template: {
+    id: string;
+    template_code: string;
+    title: string;
+    language: string;
+  };
 }
 
 interface RoomListProps {
   conversations: Conversation[];
   activeConversation: string;
-  loadingConversations: boolean;
   connected: boolean;
   onConversationSelect: (jid: string) => void;
-  fetchExistingConversations: () => void;
 }
 
 const NotificationsModal: React.FC<{
@@ -63,7 +66,14 @@ const NotificationsModal: React.FC<{
   position: { x: number; y: number };
   onMarkAsRead: (notificationId: string) => void;
   onMarkAllAsRead: () => void;
-}> = ({ isOpen, onClose, notifications, position, onMarkAsRead, onMarkAllAsRead }) => {
+}> = ({
+  isOpen,
+  onClose,
+  notifications,
+  position,
+  onMarkAsRead,
+  onMarkAllAsRead,
+}) => {
   if (!isOpen) return null;
 
   return (
@@ -75,7 +85,7 @@ const NotificationsModal: React.FC<{
         <h3 className="text-lg font-semibold">Notifications</h3>
         <button
           onClick={onMarkAllAsRead}
-          className="text-sm text-blue-500 hover:text-blue-600"
+          className="text-sm text-[#2A8FEA] hover:text-blue-600"
         >
           Mark all as read
         </button>
@@ -98,7 +108,7 @@ const NotificationsModal: React.FC<{
               {!notification.read_receipt && (
                 <button
                   onClick={() => onMarkAsRead(notification.id)}
-                  className="text-xs text-blue-500 hover:text-blue-600"
+                  className="text-xs text-[#2A8FEA] hover:text-blue-600"
                 >
                   Mark as read
                 </button>
@@ -124,7 +134,7 @@ const StatusComponent: React.FC<{
 }> = ({ statusUsers, onStatusClick, onAddStatusClick }) => {
   return (
     <div className="text-[var(--foreground)] rounded-lg mb-4">
-      <div className="flex justify-end items-center mb-4">
+      <div className="flex justify-end cursor-pointer hover:underline items-center mb-4">
         <h2 className="text-sm">All Status</h2>
       </div>
 
@@ -135,11 +145,11 @@ const StatusComponent: React.FC<{
               console.log("Add Status button clicked");
               onAddStatusClick();
             }}
-            className="relative w-20 h-24 rounded-2xl bg-gray-300 flex items-center justify-center hover:bg-gray-600 transition-colors"
+            className="relative w-24 h-24 rounded-2xl bg-gray-300 flex flex-col items-center justify-center hover:bg-gray-600 transition-colors"
           >
-            <div className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center">
+            <div className="w-4 h-4 rounded-full border-2 border-white flex items-center justify-center">
               <svg
-                className="w-6 h-6 text-white"
+                className="w-4 h-4 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -152,10 +162,10 @@ const StatusComponent: React.FC<{
                 />
               </svg>
             </div>
+            <div className="text-center mt-2">
+              <div className="text-xs font-medium">Add Status</div>
+            </div>
           </button>
-          <div className="text-center">
-            <div className="text-sm font-medium">Add Status</div>
-          </div>
         </div>
 
         <div className="flex-1 grid grid-cols-2 gap-2">
@@ -164,10 +174,8 @@ const StatusComponent: React.FC<{
               <div className="relative">
                 <button
                   onClick={() => onStatusClick(user, index)}
-                  className={`relative w-24 h-24 overflow-hidden border-3 transition-all ${
-                    user.statuses.some((s) => !s.isViewed)
-                      ? "border-blue-400 ring-2 ring-blue-400/40"
-                      : "border-gray-600"
+                  className={`relative w-24 h-24 overflow-hidden  transition-all ${
+                    user.statuses.some((s) => !s.isViewed) ? "" : ""
                   }`}
                   style={{
                     borderTopLeftRadius: "1rem",
@@ -211,7 +219,7 @@ const StatusComponent: React.FC<{
                   )}
                 </button>
 
-                <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-10 h-10 rounded-full border-3 border-gray-900 overflow-hidden z-10">
+                <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-10 h-10 rounded-full border-4 border-white overflow-hidden z-10">
                   {user.avatar ? (
                     <img
                       src={user.avatar}
@@ -240,25 +248,29 @@ const StatusComponent: React.FC<{
 const RoomList: React.FC<RoomListProps> = ({
   conversations,
   activeConversation,
-  loadingConversations,
   connected,
   onConversationSelect,
-  fetchExistingConversations,
 }) => {
   const { user, accessToken } = useAuthStore();
-  const { contacts, getContactName, getContactAvatar, fetchContacts } = useContactsStore();
+  const { contacts, getContactName, getContactAvatar, fetchContacts } =
+    useContactsStore();
   const { notifications, markAsRead, markAllAsRead } = useSocket();
-  const { statusUsers, isLoadingStatuses, fetchStatuses, uploadStatus } = useStatusStore();
+  const { statusUsers, isLoadingStatuses, fetchStatuses, uploadStatus } =
+    useStatusStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [activeTab, setActiveTab] = useState("All");
   const [showStatusViewer, setShowStatusViewer] = useState(false);
   const [showStatusUpload, setShowStatusUpload] = useState(false);
-  const [selectedStatusUser, setSelectedStatusUser] = useState<StatusUser | null>(null);
+  const [selectedStatusUser, setSelectedStatusUser] =
+    useState<StatusUser | null>(null);
   const [selectedUserIndex, setSelectedUserIndex] = useState(0);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
-  const [notificationPosition, setNotificationPosition] = useState({ x: 0, y: 0 });
+  const [notificationPosition, setNotificationPosition] = useState({
+    x: 0,
+    y: 0,
+  });
 
   const getUserIdFromJid = (jid: string) => jid.split("@")[0];
 
@@ -285,16 +297,16 @@ const RoomList: React.FC<RoomListProps> = ({
     setShowNotificationsModal(!showNotificationsModal);
   };
 
-  const filteredConversations = () => {
+  const filteredConversations = useMemo(() => {
     switch (activeTab) {
       case "Unread":
         return conversations.filter((conv) => conv.unreadCount > 0);
       case "Starred":
-        return conversations.filter((conv) => false);
+        return conversations.filter((conv) => conv.starred);
       default:
         return conversations;
     }
-  };
+  }, [conversations, activeTab]);
 
   useEffect(() => {
     if (accessToken && user?.id) {
@@ -340,21 +352,6 @@ const RoomList: React.FC<RoomListProps> = ({
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Chats</h1>
           <div className="flex items-center space-x-3">
-            <button className="p-2 hover:text-gray-700">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </button>
             <Bell
               className="w-5 h-5 text-gray-500 hover:text-gray-700 cursor-pointer"
               onClick={handleBellClick}
@@ -406,7 +403,7 @@ const RoomList: React.FC<RoomListProps> = ({
           <input
             type="text"
             placeholder="Search Chats"
-            className="w-full pl-12 pr-4 py-3 bg-gray-100 border-0 text-black rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm"
+            className="w-full pl-12 pr-4 py-3 bg-gray-100 border-0 text-black rounded-xl focus:ring-2 focus:ring-[#2A8FEA] focus:bg-white text-sm"
           />
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <svg
@@ -426,7 +423,7 @@ const RoomList: React.FC<RoomListProps> = ({
         </div>
         {isLoadingStatuses ? (
           <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#2A8FEA]"></div>
           </div>
         ) : (
           <div className="mb-4">
@@ -442,9 +439,9 @@ const RoomList: React.FC<RoomListProps> = ({
         <div className="flex space-x-3">
           <button
             onClick={() => setActiveTab("All")}
-            className={`px-6 py-1 rounded-full text-sm font-medium ${
+            className={`flex-1 px-6 py-1 rounded-full cursor-pointer text-sm font-medium ${
               activeTab === "All"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#2A8FEA] text-white"
                 : "bg-transparent hover:bg-gray-100 border border-gray-200"
             }`}
           >
@@ -452,9 +449,9 @@ const RoomList: React.FC<RoomListProps> = ({
           </button>
           <button
             onClick={() => setActiveTab("Unread")}
-            className={`px-6 py-1 rounded-full text-sm font-medium ${
+            className={`flex-1 px-6 py-1 rounded-full cursor-pointer text-sm font-medium ${
               activeTab === "Unread"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#2A8FEA] text-white"
                 : "bg-transparent hover:bg-gray-100 border border-gray-200"
             }`}
           >
@@ -462,9 +459,9 @@ const RoomList: React.FC<RoomListProps> = ({
           </button>
           <button
             onClick={() => setActiveTab("Starred")}
-            className={`px-6 py-1 rounded-full text-sm font-medium ${
+            className={`flex-1 px-6 py-1 rounded-full cursor-pointer text-sm font-medium ${
               activeTab === "Starred"
-                ? "bg-blue-500 text-white"
+                ? "bg-[#2A8FEA] text-white"
                 : "bg-transparent hover:bg-gray-100 border border-gray-200"
             }`}
           >
@@ -473,12 +470,7 @@ const RoomList: React.FC<RoomListProps> = ({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {loadingConversations ? (
-          <div className="p-6 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
-            <p className="text-sm">Loading conversations...</p>
-          </div>
-        ) : filteredConversations().length === 0 ? (
+        {filteredConversations.length === 0 ? (
           <div className="p-6 text-center">
             <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
               <img
@@ -487,14 +479,20 @@ const RoomList: React.FC<RoomListProps> = ({
                 className="w-12 h-12"
               />
             </div>
-            <p className="text-sm mb-3">No conversations yet</p>
+            <p className="text-sm mb-3">
+              {activeTab === "Unread"
+                ? "No unread conversations"
+                : activeTab === "Starred"
+                ? "No starred conversations"
+                : "No conversations yet"}
+            </p>
           </div>
         ) : (
           <div className="overflow-y-auto h-[calc(100vh-200px)]">
-            {filteredConversations().map((conv) => {
+            {filteredConversations.map((conv) => {
               const userId = getUserIdFromJid(conv.jid);
-              const contactAvatar = getContactAvatar(userId); // Get avatar from contactsStore
-              const displayAvatar = contactAvatar || conv.avatar; // Prefer contact avatar, fallback to conv.avatar
+              const contactAvatar = getContactAvatar(userId);
+              const displayAvatar = contactAvatar || conv.avatar;
               const displayName = getContactName(userId, user?.id);
 
               return (
@@ -539,7 +537,7 @@ const RoomList: React.FC<RoomListProps> = ({
                               <span className="text-sm mr-1">You:</span>
                             )}
                             {conv.lastMessage.includes("received") && (
-                              <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center mr-2">
+                              <div className="w-4 h-4 rounded-full bg-[#2A8FEA] flex items-center justify-center mr-2">
                                 <span className="text-white text-xs">Ksh </span>
                               </div>
                             )}
@@ -550,10 +548,13 @@ const RoomList: React.FC<RoomListProps> = ({
                         </div>
                         <div className="flex flex-col items-end ml-2">
                           <p className="text-xs mb-1">
-                            {conv.lastMessageTime.toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {conv.lastMessageTime instanceof Date &&
+                            !isNaN(conv.lastMessageTime.getTime())
+                              ? conv.lastMessageTime.toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "Unknown time"}
                           </p>
                         </div>
                       </div>
