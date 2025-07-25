@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
+import { useContactsStore } from "@/store/contactsStore";
 import { useSocket } from "@/services/notificationSocket";
 import NewChatModal from "./NewChatModal";
 import StatusViewerModal from "./StatusViewerModal";
@@ -17,11 +18,6 @@ interface Conversation {
   lastMessageTime: Date;
   unreadCount: number;
   isOnline?: boolean;
-}
-
-interface Contact {
-  id: string;
-  name: string;
 }
 
 interface StatusUser {
@@ -86,7 +82,6 @@ interface RoomListProps {
   connected: boolean;
   onConversationSelect: (jid: string) => void;
   fetchExistingConversations: () => void;
-  contacts: Contact[];
 }
 
 const NotificationsModal: React.FC<{
@@ -277,9 +272,9 @@ const RoomList: React.FC<RoomListProps> = ({
   connected,
   onConversationSelect,
   fetchExistingConversations,
-  contacts,
 }) => {
   const { user, accessToken } = useAuthStore();
+  const { contacts, getContactName, fetchContacts } = useContactsStore();
   const { notifications, markAsRead, markAllAsRead } = useSocket();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
@@ -295,15 +290,7 @@ const RoomList: React.FC<RoomListProps> = ({
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [notificationPosition, setNotificationPosition] = useState({ x: 0, y: 0 });
 
-  const getDisplayName = (jid: string) => {
-    const username = jid.split("@")[0];
-    const contact = contacts.find((c) => c.id === username);
-    return contact
-      ? contact.name
-      : username.charAt(0).toUpperCase() + username.slice(1);
-  };
-
-  const getAvatarColor = () => "bg-gray-500";
+  const getUserIdFromJid = (jid: string) => jid.split("@")[0];
 
   const handleMenuToggle = (event: React.MouseEvent) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -340,6 +327,12 @@ const RoomList: React.FC<RoomListProps> = ({
   };
 
   useEffect(() => {
+    if (accessToken && user?.id) {
+      fetchContacts();
+    }
+  }, [accessToken, user?.id, fetchContacts]);
+
+  useEffect(() => {
     const fetchStatuses = async () => {
       setIsLoadingStatuses(true);
       try {
@@ -353,7 +346,6 @@ const RoomList: React.FC<RoomListProps> = ({
         const statusUsersMap: { [key: string]: StatusUser } = {};
         rawStatuses.forEach((status: any) => {
           const userId = status.userId;
-          const contact = contacts.find((c) => c.id === userId);
           const statusItem: StatusItem = {
             id: status.id,
             type: status.media.length > 0 ? status.media[0].type : "text",
@@ -377,8 +369,8 @@ const RoomList: React.FC<RoomListProps> = ({
           if (!statusUsersMap[userId]) {
             statusUsersMap[userId] = {
               id: userId,
-              name: contact?.name || userId,
-              avatar: contact?.avatar,
+              name: getContactName(userId, user?.id),
+              avatar: contacts.find((c) => c.id === userId)?.avatar,
               statuses: [],
             };
           }
@@ -391,7 +383,7 @@ const RoomList: React.FC<RoomListProps> = ({
           mappedStatuses.push(
             {
               id: "dummy1",
-              name: contacts[0]?.name || "John Doe",
+              name: getContactName("dummy1", user?.id) || "John Doe",
               avatar: contacts[0]?.avatar,
               statuses: [
                 {
@@ -409,7 +401,7 @@ const RoomList: React.FC<RoomListProps> = ({
             },
             {
               id: "dummy2",
-              name: contacts[1]?.name || "Jane Smith",
+              name: getContactName("dummy2", user?.id) || "Jane Smith",
               avatar: contacts[1]?.avatar,
               statuses: [
                 {
@@ -432,7 +424,7 @@ const RoomList: React.FC<RoomListProps> = ({
         setStatusUsers([
           {
             id: "dummy1",
-            name: contacts[0]?.name || "John Doe",
+            name: getContactName("dummy1", user?.id) || "John Doe",
             avatar: contacts[0]?.avatar,
             statuses: [
               {
@@ -450,7 +442,7 @@ const RoomList: React.FC<RoomListProps> = ({
           },
           {
             id: "dummy2",
-            name: contacts[1]?.name || "Jane Smith",
+            name: getContactName("dummy2", user?.id) || "Jane Smith",
             avatar: contacts[1]?.avatar,
             statuses: [
               {
@@ -473,7 +465,7 @@ const RoomList: React.FC<RoomListProps> = ({
     if (accessToken) {
       fetchStatuses();
     }
-  }, [accessToken, contacts]);
+  }, [accessToken, contacts, user?.id, getContactName]);
 
   const handleStatusClick = (user: StatusUser, index: number) => {
     setSelectedStatusUser(user);
@@ -526,7 +518,6 @@ const RoomList: React.FC<RoomListProps> = ({
       const statusUsersMap: { [key: string]: StatusUser } = {};
       rawStatuses.forEach((status: any) => {
         const userId = status.userId;
-        const contact = contacts.find((c) => c.id === userId);
         const statusItem: StatusItem = {
           id: status.id,
           type: status.media.length > 0 ? status.media[0].type : "text",
@@ -550,8 +541,8 @@ const RoomList: React.FC<RoomListProps> = ({
         if (!statusUsersMap[userId]) {
           statusUsersMap[userId] = {
             id: userId,
-            name: contact?.name || userId,
-            avatar: contact?.avatar,
+            name: getContactName(userId, user?.id),
+            avatar: contacts.find((c) => c.id === userId)?.avatar,
             statuses: [],
           };
         }
@@ -563,6 +554,8 @@ const RoomList: React.FC<RoomListProps> = ({
       toast.error("Failed to upload status");
     }
   };
+
+  const getAvatarColor = () => "bg-gray-500";
 
   return (
     <div className="w-90 bg-[var(--background)] text-[var(--foreground)] shadow-lg flex flex-col">
@@ -739,12 +732,12 @@ const RoomList: React.FC<RoomListProps> = ({
                       {conv.avatar ? (
                         <img
                           src={conv.avatar}
-                          alt={conv.name}
+                          alt={getContactName(getUserIdFromJid(conv.jid), user?.id)}
                           className="w-full h-full rounded-full object-cover"
                         />
                       ) : (
                         <span className="text-lg">
-                          {(conv.name || getDisplayName(conv.jid))
+                          {getContactName(getUserIdFromJid(conv.jid), user?.id)
                             .charAt(0)
                             .toUpperCase()}
                         </span>
@@ -758,7 +751,7 @@ const RoomList: React.FC<RoomListProps> = ({
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <p className="text-base font-semibold truncate mb-1">
-                          {conv.name || getDisplayName(conv.jid)}
+                          {getContactName(getUserIdFromJid(conv.jid), user?.id)}
                         </p>
                         <div className="flex items-center">
                           {conv.lastMessage.includes("You:") && (

@@ -1,7 +1,7 @@
 import React from "react";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
-import { getFcmToken } from "@/utils/firebase";
+import { getFcmToken, getFcmTokenWithPrompt } from "@/utils/firebase";
 
 // Types
 interface User {
@@ -123,13 +123,27 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, error: null });
 
           try {
-            const fcmToken = await getFcmToken();
+            // Try to get FCM token, but don't fail if it's not available
+            let fcmToken: string | null = null;
+
+            try {
+              fcmToken = await getFcmToken();
+              if (!fcmToken) {
+                console.log(
+                  "FCM token not available, continuing without notifications"
+                );
+              }
+            } catch (fcmError) {
+              console.warn("Could not get FCM token:", fcmError);
+              // Continue without FCM token - don't fail the entire sign-in process
+            }
+
             const formData = {
               login_type: "phone_number",
               phone_number: credentials.phoneNumber,
               country_code: credentials.countryCode,
               country: credentials.country,
-              fcm_token: fcmToken || "sample_fcm_token",
+              fcm_token: fcmToken || "web_no_fcm_token", // Use a fallback value
               source: "web",
               app_id: "web_app",
             };
@@ -290,7 +304,9 @@ export const useAuthStore = create<AuthState>()(
             return "/chat";
           } catch (error) {
             const errorMessage =
-              error instanceof Error ? error.message : "OTP verification failed";
+              error instanceof Error
+                ? error.message
+                : "OTP verification failed";
             set({
               error: errorMessage,
               isLoading: false,

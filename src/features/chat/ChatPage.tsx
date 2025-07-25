@@ -6,6 +6,7 @@ import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { Strophe, $pres, $msg, $iq } from "strophe.js";
 import { useAuthStore } from "@/store/authStore";
+import { useContactsStore } from "@/store/contactsStore";
 import {
   ChatInput,
   MessageList,
@@ -21,14 +22,8 @@ import { useTheme } from "@/providers/ThemeProvider";
 const API_HOST = "http://xmpp-dev.wasaachat.com:8080/api/v1";
 const BOSH_SERVICE = "http://xmpp-dev.wasaachat.com:5280/bosh";
 const DOMAIN = "xmpp-dev.wasaachat.com";
-const CONTACTS_API = "http://138.68.190.213:3019/api/v1/contacts/user";
 
 // Utility Functions
-const getDisplayName = (jid: string) => {
-  const username = jid.split("@")[0];
-  return username.charAt(0).toUpperCase() + username.slice(1);
-};
-
 const getAvatarColor = () => "bg-gray-500";
 
 const getDummyAvatar = (id: string) => {
@@ -67,11 +62,6 @@ interface User {
   jid: string;
 }
 
-interface Contact {
-  id: string;
-  name: string;
-}
-
 interface ConversationMember {
   id: string;
   name?: string;
@@ -94,6 +84,7 @@ interface Conversation {
 
 const ChatPage: React.FC = () => {
   const { user, isAuthenticated, accessToken } = useAuthStore();
+  const { getContactName } = useContactsStore();
   const { isDarkMode } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
@@ -117,7 +108,6 @@ const ChatPage: React.FC = () => {
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const [currentConversationDetails, setCurrentConversationDetails] =
     useState<Conversation | null>(null);
-  const [contacts, setContacts] = useState<Contact[]>([]);
   const maxConnectionAttempts = 3;
 
   // Refs
@@ -161,32 +151,6 @@ const ChatPage: React.FC = () => {
   }, [currentUser?.id]);
 
   console.log("Token:", accessToken);
-
-  // Fetch contacts
-  useEffect(() => {
-    if (currentUser?.id && accessToken) {
-      axios
-        .get(`${CONTACTS_API}/${currentUser.id}`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "x-api-key":
-              "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==",
-          },
-        })
-        .then((response) => {
-          setContacts(
-            response.data.map((contact: any) => ({
-              id: contact.id,
-              name: contact.name || getDisplayName(contact.id),
-            }))
-          );
-        })
-        .catch((error) => {
-          console.error("Failed to fetch contacts:", error);
-          setConnectionError("Failed to fetch contacts");
-        });
-    }
-  }, [currentUser?.id, accessToken]);
 
   const saveReadConversations = (readSet: Set<string>) => {
     if (currentUser?.id) {
@@ -420,7 +384,7 @@ const ChatPage: React.FC = () => {
     setConversations((prev) => {
       const existingIndex = prev.findIndex((conv) => conv.jid === jid);
       const isRead = readConversations.has(jid);
-      const contact = contacts.find((c) => c.id === jid.split("@")[0]);
+      const userId = jid.split("@")[0];
 
       if (existingIndex >= 0) {
         const updated = [...prev];
@@ -434,7 +398,7 @@ const ChatPage: React.FC = () => {
             : incrementUnread
             ? currentUnread + 1
             : currentUnread,
-          name: contact?.name || getDisplayName(jid), // Update name from contacts
+          name: getContactName(userId, currentUser?.id),
         };
         return updated.sort(
           (a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
@@ -442,7 +406,7 @@ const ChatPage: React.FC = () => {
       } else {
         const newConv: Conversation = {
           jid,
-          name: contact?.name || getDisplayName(jid), // Use contact name if available
+          name: getContactName(userId, currentUser?.id),
           lastMessage,
           lastMessageTime: timestamp,
           unreadCount: isRead ? 0 : incrementUnread ? 1 : 0,
@@ -466,7 +430,7 @@ const ChatPage: React.FC = () => {
     setConnectionError(null);
 
     const username = currentUser.id;
-    const password = currentUser.id; // Assuming password is same as ID
+    const password = currentUser.id; 
 
     console.log(`Connecting as: ${currentUser.jid}`);
     connectionRef.current.connect(currentUser.jid, password, onConnect);
@@ -525,6 +489,7 @@ const ChatPage: React.FC = () => {
           const lastMessage = msg.txt || "";
           const isOwn = msg.xml.includes(`from='${currentUser?.jid}`);
           const isGroup = msg.is_group || false;
+          const userId = jid.split("@")[0];
 
           if (
             !conversationMap[jid] ||
@@ -532,7 +497,7 @@ const ChatPage: React.FC = () => {
           ) {
             conversationMap[jid] = {
               jid,
-              name: msg.name || getDisplayName(jid),
+              name: getContactName(userId, currentUser?.id),
               avatar: msg.avatar,
               lastMessage: isOwn ? `You: ${lastMessage}` : lastMessage,
               lastMessageTime: timestamp,
@@ -544,15 +509,15 @@ const ChatPage: React.FC = () => {
               members: isGroup
                 ? msg.members?.map((m: any) => ({
                     id: m.id,
-                    name: m.name,
+                    name: getContactName(m.id, currentUser?.id),
                     avatar: m.avatar,
                     phoneNumber: m.phone_number,
                     lastSeen: m.last_seen,
                   }))
                 : [
                     {
-                      id: jid.split("@")[0],
-                      name: msg.name,
+                      id: userId,
+                      name: getContactName(userId, currentUser?.id),
                       avatar: msg.avatar,
                       phoneNumber: msg.phone_number,
                       lastSeen: msg.last_seen,
@@ -578,7 +543,7 @@ const ChatPage: React.FC = () => {
                   isOnline: newConv.isOnline || existing.isOnline,
                   type: newConv.type,
                   members: newConv.members,
-                  name: newConv.name || existing.name, // Preserve name
+                  name: newConv.name || existing.name,
                 });
               }
             } else {
@@ -739,7 +704,7 @@ const ChatPage: React.FC = () => {
         for (let i = 0; i < items.length; i++) {
           const item = items[i];
           const jid = item.getAttribute("jid");
-          const name = item.getAttribute("name") || getDisplayName(jid);
+          const userId = jid.split("@")[0];
 
           setConversations((prev) => {
             if (prev.some((conv) => conv.jid === jid)) {
@@ -747,12 +712,12 @@ const ChatPage: React.FC = () => {
             }
             const newConv: Conversation = {
               jid,
-              name,
-              lastMessage: `Contact: ${name}`,
+              name: getContactName(userId, currentUser?.id),
+              lastMessage: `Contact: ${getContactName(userId, currentUser?.id)}`,
               lastMessageTime: new Date(),
               unreadCount: 0,
               type: "CHAT",
-              members: [{ id: jid.split("@")[0], name }],
+              members: [{ id: userId, name: getContactName(userId, currentUser?.id) }],
             };
             return [...prev, newConv];
           });
@@ -945,9 +910,10 @@ const ChatPage: React.FC = () => {
   };
 
   const fetchConversationDetails = async (jid: string) => {
+    const userId = jid.split("@")[0];
     try {
       const response = await axios.get(
-        `${API_HOST}/users/${jid.split("@")[0]}`,
+        `${API_HOST}/users/${userId}`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
         }
@@ -956,21 +922,21 @@ const ChatPage: React.FC = () => {
       const isGroup = data.is_group || false;
       setCurrentConversationDetails({
         jid,
-        name: data.name || getDisplayName(jid),
+        name: getContactName(userId, currentUser?.id),
         avatar: data.avatar || getDummyAvatar(jid),
         type: isGroup ? "GROUP" : "CHAT",
         members: isGroup
           ? data.members?.map((m: any) => ({
               id: m.id,
-              name: m.name,
+              name: getContactName(m.id, currentUser?.id),
               avatar: m.avatar || getDummyAvatar(m.id),
               phoneNumber: m.phone_number,
               lastSeen: m.last_seen,
             }))
           : [
               {
-                id: jid.split("@")[0],
-                name: data.name,
+                id: userId,
+                name: getContactName(userId, currentUser?.id),
                 avatar: data.avatar || getDummyAvatar(jid),
                 phoneNumber: data.phone_number || "+254712345678",
                 lastSeen: data.last_seen,
@@ -984,13 +950,13 @@ const ChatPage: React.FC = () => {
       console.error("Failed to fetch conversation details:", error);
       setCurrentConversationDetails({
         jid,
-        name: getDisplayName(jid),
+        name: getContactName(userId, currentUser?.id),
         avatar: getDummyAvatar(jid),
         type: "CHAT",
         members: [
           {
-            id: jid.split("@")[0],
-            name: getDisplayName(jid),
+            id: userId,
+            name: getContactName(userId, currentUser?.id),
             avatar: getDummyAvatar(jid),
           },
         ],
@@ -1166,7 +1132,7 @@ const ChatPage: React.FC = () => {
   // Render main chat interface
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex">
-      <SidebarNav onClose={() => {}} currentPath={pathname} />
+ Flats  <SidebarNav onClose={() => {}} currentPath={pathname} />
       <div className="flex-1 flex ml-20">
         <RoomList
           conversations={conversations}
@@ -1175,14 +1141,13 @@ const ChatPage: React.FC = () => {
           connected={connected}
           onConversationSelect={startConversation}
           fetchExistingConversations={fetchExistingConversations}
-          contacts={contacts} // Pass contacts to RoomList
         />
         <div className="flex-1 flex flex-col">
           {activeConversation ? (
             <>
               <ChatHeader
                 activeConversation={activeConversation}
-                getDisplayName={getDisplayName}
+                getDisplayName={(jid: string) => getContactName(jid.split("@")[0], currentUser?.id)}
                 getAvatarColor={getAvatarColor}
                 onCallClick={() => console.log("Voice call")}
                 onVideoClick={() => console.log("Video call")}
@@ -1230,21 +1195,22 @@ const ChatPage: React.FC = () => {
             setConnectionError(`Invalid JID format: ${jid}`);
             return;
           }
+          const userId = jid.split("@")[0];
           setConversations((prev) => {
             if (prev.some((conv) => conv.jid === jid)) {
               return prev;
             }
             const newConv: Conversation = {
               jid,
-              name: getDisplayName(jid),
+              name: getContactName(userId, currentUser?.id),
               lastMessage: "No messages yet",
               lastMessageTime: new Date(),
               unreadCount: 0,
               type: "CHAT",
               members: [
                 {
-                  id: jid.split("@")[0],
-                  name: getDisplayName(jid),
+                  id: userId,
+                  name: getContactName(userId, currentUser?.id),
                   avatar: getDummyAvatar(jid),
                 },
               ],

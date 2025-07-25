@@ -1387,7 +1387,7 @@ const Call: React.FC = () => {
                         return (
                           <div
                             key={contact.contact_id}
-                            className="flex items-center space-x-3 py-3 hover:bg-gray-50 hover:dark:bg-black hover:cursor-pointer rounded-lg px-2"
+                            className="flex items-center space-x-3 py-3 hover:bg-gray-50 hover:cursor-pointer rounded-lg px-2"
                           >
                             <div className="w-12 h-12 rounded-full bg-gray-500 flex items-center justify-center text-white font-semibold">
                               {contactName.charAt(0).toUpperCase()}
