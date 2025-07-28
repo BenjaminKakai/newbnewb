@@ -47,7 +47,7 @@ interface Room {
 }
 
 const API_BASE_URL = "https://calls-dev.wasaachat.com/v1";
-const SOCKET_URL = "wss://calls-dev.wasaachat.com";
+const SOCKET_URL = "wss://calls-dev.wasaachat.com:3000";
 const API_KEY =
   "QgR1v+o16jphR9AMSJ9Qf8SnOqmMd4HPziLZvMU1Mt0t7ocaT38q/8AsuOII2YxM60WaXQMkFIYv2bqo+pS/sw==";
 

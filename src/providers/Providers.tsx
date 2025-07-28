@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { ContactsInitializer } from "./ContactsInitializer";
 import { ToastProvider } from "./ToastProvider";
 import { KycRouteGuard } from "@/features/auth/components/KycRouteGuard";
 import { NotificationProvider } from "@/features/calls/components/NotificationContext";
@@ -38,9 +37,7 @@ export const Providers: React.FC<ProvidersProps> = ({ children }) => {
         <ToastProvider>
           <SocketProvider>
             <NotificationProvider>
-              <ContactsInitializer>
-                <KycRouteGuard>{children}</KycRouteGuard>
-              </ContactsInitializer>
+              <KycRouteGuard>{children}</KycRouteGuard>
             </NotificationProvider>
           </SocketProvider>
         </ToastProvider>

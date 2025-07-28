@@ -112,7 +112,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <div className="px-4 py-3">
+    <div className="px-4 py-3 bg-[var(--background)]">
       <div className="flex items-center relative">
         <div className="flex-1 flex items-center border border-gray-400 rounded-lg overflow-hidden">
           <button

@@ -69,7 +69,11 @@ const MessageList: React.FC<MessageListProps> = ({
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <div className="w-60 h-60 flex items-center justify-center mx-auto mb-4">
-            <img src="/empty1.svg" alt="Group Avatar" className="w-full h-full" />
+            <img
+              src="/empty1.svg"
+              alt="Group Avatar"
+              className="w-full h-full"
+            />
           </div>
         </div>
       </div>
@@ -79,9 +83,13 @@ const MessageList: React.FC<MessageListProps> = ({
   return (
     <div
       ref={messagesContainerRef}
-      style={{ height: "calc(100vh - 150px)", overflowY: "auto" }}
-      className="flex-1 bg-[var(--background)] text-[var(--foreground)] p-6 space-y-4 bg-[url('/bg-vector.png')] bg-contain bg-center bg-repeat backdrop-brightness-75 dark:backdrop-brightness-50"
+      className="flex-1 overflow-y-auto text-[var(--foreground)] p-6 space-y-4 relative"
     >
+      {/* Fixed background element */}
+      <div
+        className="absolute inset-0 bg-[url('/bg-vector.png')] bg-contain bg-center bg-repeat backdrop-brightness-75 dark:backdrop-brightness-50"
+        style={{ zIndex: -1 }}
+      ></div>
       {loadingHistory && (
         <div className="text-center">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#2A8FEA] mx-auto mb-2"></div>

@@ -7,6 +7,8 @@ class XMPPClient {
   private connected: boolean = false;
   private onMessageCallback: ((msg: any) => boolean) | null = null;
   private onMAMMessageCallback: ((msg: any) => boolean) | null = null;
+  private onGroupMessageCallback: ((msg: any) => boolean) | null = null;
+  private onPresenceCallback: ((presence: any) => boolean) | null = null;
 
   connect(jid: string, password: string, onConnect: (status: number) => void) {
     if (this.connection) {
@@ -38,10 +40,47 @@ class XMPPClient {
     this.connection.send(message.tree());
   }
 
+  sendGroupMessage(to: string, text: string, id: string) {
+    if (!this.connected || !this.connection) return;
+    const message = $msg({ to, type: "groupchat", id }).c("body").t(text);
+    this.connection.send(message.tree());
+  }
+
+  joinGroup(groupJid: string, nickname: string) {
+    if (!this.connected || !this.connection) return;
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:T.]/g, "")
+      .slice(0, 14);
+    const fromJid = `${nickname}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}/${timestamp}`;
+    const presence = $pres({
+      from: fromJid,
+      to: `${groupJid}/${nickname}`,
+      xmlns: "jabber:client",
+    }).c("x", { xmlns: "http://jabber.org/protocol/muc" });
+    this.connection.send(presence.tree());
+  }
+
+  leaveGroup(groupJid: string, nickname: string) {
+    if (!this.connected || !this.connection) return;
+    const presence = $pres({
+      to: `${groupJid}/${nickname}`,
+      type: "unavailable",
+    });
+    this.connection.send(presence.tree());
+  }
+
   addMessageHandler(callback: (msg: any) => boolean) {
     if (this.connection && !this.onMessageCallback) {
       this.onMessageCallback = callback;
-      this.connection.addHandler(callback, null, "message", null, null, null);
+      this.connection.addHandler(callback, null, "message", "chat", null, null);
+    }
+  }
+
+  addGroupMessageHandler(callback: (msg: any) => boolean) {
+    if (this.connection && !this.onGroupMessageCallback) {
+      this.onGroupMessageCallback = callback;
+      this.connection.addHandler(callback, null, "message", "groupchat", null, null);
     }
   }
 
@@ -52,15 +91,30 @@ class XMPPClient {
     }
   }
 
+  addPresenceHandler(callback: (presence: any) => boolean) {
+    if (this.connection && !this.onPresenceCallback) {
+      this.onPresenceCallback = callback;
+      this.connection.addHandler(callback, null, "presence", null, null, null);
+    }
+  }
+
   removeHandlers() {
     if (this.connection) {
       if (this.onMessageCallback) {
         this.connection.deleteHandler(this.onMessageCallback);
         this.onMessageCallback = null;
       }
+      if (this.onGroupMessageCallback) {
+        this.connection.deleteHandler(this.onGroupMessageCallback);
+        this.onGroupMessageCallback = null;
+      }
       if (this.onMAMMessageCallback) {
         this.connection.deleteHandler(this.onMAMMessageCallback);
         this.onMAMMessageCallback = null;
+      }
+      if (this.onPresenceCallback) {
+        this.connection.deleteHandler(this.onPresenceCallback);
+        this.onPresenceCallback = null;
       }
     }
   }

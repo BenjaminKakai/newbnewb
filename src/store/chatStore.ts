@@ -24,7 +24,7 @@ interface Conversation {
   lastMessageTime: Date;
   unreadCount: number;
   isOnline?: boolean;
-  type?: "CHAT" | "GROUP";
+  type: "CHAT";
   members?: ConversationMember[];
   starred?: boolean;
 }
@@ -122,6 +122,7 @@ export const useChatStore = create<ChatStore>()(
               ? existingConv.unreadCount + 1
               : existingConv.unreadCount,
             name: getContactName(userId, currentUserId),
+            type: "CHAT",
           });
         } else {
           state.addConversation({
@@ -131,6 +132,14 @@ export const useChatStore = create<ChatStore>()(
             lastMessageTime: ensureDate(timestamp),
             unreadCount: isRead ? 0 : incrementUnread ? 1 : 0,
             type: "CHAT",
+            avatar: getDummyAvatar(jid),
+            members: [
+              {
+                id: userId,
+                name: getContactName(userId, currentUserId),
+                avatar: getDummyAvatar(jid),
+              },
+            ],
           });
         }
       };
@@ -156,7 +165,7 @@ export const useChatStore = create<ChatStore>()(
 
             messages.forEach((msg: any) => {
               const jid = msg.bare_peer;
-              if (!isValidBareJid(jid)) return;
+              if (!isValidBareJid(jid) || msg.is_group) return;
 
               const isRead = get().readConversations.includes(jid);
 
@@ -166,7 +175,6 @@ export const useChatStore = create<ChatStore>()(
               const timestamp = new Date(timestampValue);
               const lastMessage = msg.txt || "";
               const isOwn = msg.xml?.includes(`from='${currentUser?.jid}`);
-              const isGroup = msg.is_group || false;
               const userId = jid.split("@")[0];
 
               if (
@@ -176,29 +184,21 @@ export const useChatStore = create<ChatStore>()(
                 conversationMap[jid] = {
                   jid,
                   name: getContactName(userId, currentUser?.id),
-                  avatar: msg.avatar,
+                  avatar: msg.avatar || getDummyAvatar(jid),
                   lastMessage: isOwn ? `You: ${lastMessage}` : lastMessage,
                   lastMessageTime: timestamp,
                   unreadCount: isRead
                     ? 0
                     : conversationMap[jid]?.unreadCount + 1 || 1,
                   isOnline: msg.state?.String === "active",
-                  type: isGroup ? "GROUP" : "CHAT",
-                  members: isGroup
-                    ? msg.members?.map((m: any) => ({
-                        id: m.id,
-                        name: getContactName(m.id, currentUser?.id),
-                        avatar: m.avatar,
-                        phoneNumber: m.phone_number,
-                        lastSeen: m.last_seen,
-                      }))
-                    : [
-                        {
-                          id: userId,
-                          name: getContactName(userId, currentUser?.id),
-                          avatar: msg.avatar,
-                        },
-                      ],
+                  type: "CHAT",
+                  members: [
+                    {
+                      id: userId,
+                      name: getContactName(userId, currentUser?.id),
+                      avatar: msg.avatar || getDummyAvatar(jid),
+                    },
+                  ],
                 };
               }
             });
@@ -209,22 +209,24 @@ export const useChatStore = create<ChatStore>()(
             );
             set({ conversations: updatedConversations });
 
-            const apiMessages: Message[] = messages.map((msg: any) => {
-              let from = msg.bare_peer;
-              let to = currentUser?.jid || "";
-              if (msg.xml?.includes(`from='${currentUser?.jid}`)) {
-                from = currentUser?.jid || "";
-                to = msg.bare_peer;
-              }
-              return {
-                id: msg.origin_id || uuidv4(),
-                from: from.split("/")[0],
-                to: to.split("/")[0],
-                text: msg.txt || "",
-                timestamp: ensureDate(msg.created_at || msg.timestamp * 1000),
-                isOwn: msg.xml?.includes(`from='${currentUser?.jid}`),
-              };
-            });
+            const apiMessages: Message[] = messages
+              .filter((msg: any) => !msg.is_group)
+              .map((msg: any) => {
+                let from = msg.bare_peer;
+                let to = currentUser?.jid || "";
+                if (msg.xml?.includes(`from='${currentUser?.jid}`)) {
+                  from = currentUser?.jid || "";
+                  to = msg.bare_peer;
+                }
+                return {
+                  id: msg.origin_id || uuidv4(),
+                  from: from.split("/")[0],
+                  to: to.split("/")[0],
+                  text: msg.txt || "",
+                  timestamp: ensureDate(msg.created_at || msg.timestamp * 1000),
+                  isOwn: msg.xml?.includes(`from='${currentUser?.jid}`),
+                };
+              });
 
             set((state) => {
               const updatedMessages = [...state.messages, ...apiMessages]
@@ -393,6 +395,7 @@ export const useChatStore = create<ChatStore>()(
                     {
                       id: userId,
                       name: getContactName(userId, currentUser?.id),
+                      avatar: getDummyAvatar(jid),
                     },
                   ],
                 });
@@ -554,42 +557,40 @@ export const useChatStore = create<ChatStore>()(
       ) => {
         if (!currentUser || !API_HOST) return;
 
+        const userId = withJid.split("@")[0];
+        const endpoint = `${API_HOST}/user/${currentUser.id}/${userId}`;
+
         try {
-          const response = await axios.get(
-            `${API_HOST}/user/${currentUser.id}/${withJid.split("@")[0]}`,
-            {
-              headers: { Authorization: `Bearer ${get().accessToken}` },
-            }
-          );
+          const response = await axios.get(endpoint, {
+            headers: { Authorization: `Bearer ${get().accessToken}` },
+          });
 
-          if (response.data?.messages) {
-            const apiMessages: Message[] = response.data.messages.map(
-              (msg: any) => ({
-                id: msg.id || uuidv4(),
-                from: msg.from,
-                to: msg.to,
-                text: msg.body || msg.text,
-                timestamp: ensureDate(msg.timestamp),
-                isOwn: msg.from === currentUser.jid,
-              })
-            );
+          const apiMessages: Message[] = response.data?.messages?.map(
+            (msg: any) => ({
+              id: msg.id || uuidv4(),
+              from: msg.from,
+              to: msg.to,
+              text: msg.body || msg.text,
+              timestamp: ensureDate(msg.timestamp),
+              isOwn: msg.from === currentUser.jid,
+            })
+          ) || [];
 
-            set((state) => ({
-              messages: [...state.messages, ...apiMessages]
-                .filter(
-                  (msg, index, self) =>
-                    index ===
-                    self.findIndex(
-                      (m) =>
-                        m.text === msg.text &&
-                        Math.abs(
-                          m.timestamp.getTime() - msg.timestamp.getTime()
-                        ) < 1000
-                    )
-                )
-                .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
-            }));
-          }
+          set((state) => ({
+            messages: [...state.messages, ...apiMessages]
+              .filter(
+                (msg, index, self) =>
+                  index ===
+                  self.findIndex(
+                    (m) =>
+                      m.text === msg.text &&
+                      Math.abs(
+                        m.timestamp.getTime() - msg.timestamp.getTime()
+                      ) < 1000
+                  )
+              )
+              .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
+          }));
         } catch (error) {
           console.error("Failed to fetch message history from API:", error);
         }
@@ -719,7 +720,7 @@ export const useChatStore = create<ChatStore>()(
                   const text = Strophe.getText(body);
                   const fromJid = from.split("/")[0];
                   const newMessage: Message = {
-                    id: uuidv4(),
+                    id: msg.getAttribute("id") || uuidv4(),
                     from: fromJid,
                     to: user?.jid || "",
                     text,
@@ -759,13 +760,14 @@ export const useChatStore = create<ChatStore>()(
                       const timestamp = ensureDate(
                         delay ? delay.getAttribute("stamp") : new Date()
                       );
+                      if (from.includes("@conference.")) return true;
                       const otherJid =
                         from.split("/")[0] === user?.jid
                           ? to.split("/")[0]
                           : from.split("/")[0];
 
                       const historicalMessage: Message = {
-                        id: uuidv4(),
+                        id: message.getAttribute("id") || uuidv4(),
                         from: from.split("/")[0],
                         to: to.split("/")[0],
                         text,
@@ -870,37 +872,32 @@ export const useChatStore = create<ChatStore>()(
           if (!API_HOST) return;
 
           const userId = jid.split("@")[0];
+          const endpoint = `${API_HOST}/users/${userId}`;
+
           try {
-            const response = await axios.get(`${API_HOST}/users/${userId}`, {
+            const response = await axios.get(endpoint, {
               headers: { Authorization: `Bearer ${get().accessToken}` },
             });
             const data = response.data;
-            const isGroup = data.is_group || false;
             set({
               currentConversationDetails: {
                 jid,
                 name: getContactName(userId, get().currentUser?.id),
                 avatar: data.avatar || getDummyAvatar(jid),
-                type: isGroup ? "GROUP" : "CHAT",
-                members: isGroup
-                  ? data.members?.map((m: any) => ({
-                      id: m.id,
-                      name: getContactName(m.id, get().currentUser?.id),
-                      avatar: m.avatar || getDummyAvatar(m.id),
-                      phoneNumber: m.phone_number,
-                      lastSeen: m.last_seen,
-                    }))
-                  : [
-                      {
-                        id: userId,
-                        name: getContactName(userId, get().currentUser?.id),
-                        avatar: data.avatar || getDummyAvatar(jid),
-                        phoneNumber: data.phone_number || "+254712345678",
-                        lastSeen: data.last_seen,
-                      },
-                    ],
-                lastMessage: "",
-                lastMessageTime: new Date(),
+                type: "CHAT",
+                members: [
+                  {
+                    id: userId,
+                    name: getContactName(userId, get().currentUser?.id),
+                    avatar: data.avatar || getDummyAvatar(jid),
+                    phoneNumber: data.phone_number || "+254712345678",
+                    lastSeen: data.last_seen,
+                  },
+                ],
+                lastMessage: data.last_chat_message?.txt || "",
+                lastMessageTime: data.created_at
+                  ? ensureDate(data.created_at)
+                  : new Date(),
                 unreadCount: 0,
               },
             });

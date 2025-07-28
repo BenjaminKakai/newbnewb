@@ -5,7 +5,14 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { useContactsStore } from "@/store/contactsStore";
 import { useChatStore } from "@/store/chatStore";
-import { ChatInput, MessageList, ChatHeader, NewChatModal, RoomList, Message } from "./components";
+import {
+  ChatInput,
+  MessageList,
+  ChatHeader,
+  NewChatModal,
+  RoomList,
+  Message,
+} from "./components";
 import UserInfo from "./components/UserInfo";
 import SidebarNav from "@/components/SidebarNav";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -47,7 +54,12 @@ const ChatPage: React.FC = () => {
         router.replace("/login");
         return;
       }
-      const currentUser = user?.id ? { id: user.id, jid: `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}` } : null;
+      const currentUser = user?.id
+        ? {
+            id: user.id,
+            jid: `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}`,
+          }
+        : null;
       initializeConnection(currentUser, accessToken, getContactName);
       setIsCheckingAuth(false);
     };
@@ -56,22 +68,37 @@ const ChatPage: React.FC = () => {
     return () => {
       disconnect();
     };
-  }, [isAuthenticated, user, accessToken, initializeConnection, disconnect, router, getContactName]);
+  }, [
+    isAuthenticated,
+    user,
+    accessToken,
+    initializeConnection,
+    disconnect,
+    router,
+    getContactName,
+  ]);
 
   const getActiveMessages = () => {
     if (!activeConversation) return [];
     return messages
       .filter(
         (msg) =>
-          (msg.from === activeConversation && msg.to === user?.id + "@" + process.env.NEXT_PUBLIC_XMPP_DOMAIN) ||
-          (msg.from === user?.id + "@" + process.env.NEXT_PUBLIC_XMPP_DOMAIN && msg.to === activeConversation)
+          (msg.from === activeConversation &&
+            msg.to === user?.id + "@" + process.env.NEXT_PUBLIC_XMPP_DOMAIN) ||
+          (msg.from === user?.id + "@" + process.env.NEXT_PUBLIC_XMPP_DOMAIN &&
+            msg.to === activeConversation)
       )
       .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   };
 
   const handleSendMessage = () => {
     if (!messageText.trim() || !recipientJid.trim()) return;
-    const currentUser = user?.id ? { id: user.id, jid: `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}` } : null;
+    const currentUser = user?.id
+      ? {
+          id: user.id,
+          jid: `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}`,
+        }
+      : null;
     sendMessage(recipientJid, messageText, currentUser);
     setMessageText("");
     if (activeConversation !== recipientJid) {
@@ -99,7 +126,7 @@ const ChatPage: React.FC = () => {
   if (isCheckingAuth) {
     return (
       <div
-        className={`min-h-screen flex items-center justify-center ${
+        className={`h-screen flex items-center justify-center ${
           isDarkMode ? "dark:bg-[var(--background)]" : "bg-gray-100"
         } text-[var(--foreground)]`}
       >
@@ -141,11 +168,18 @@ const ChatPage: React.FC = () => {
           </h2>
           <p className="text-gray-600 mb-4">{connectionError}</p>
           <button
-            onClick={() => initializeConnection(
-              user?.id ? { id: user.id, jid: `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}` } : null,
-              accessToken,
-              getContactName
-            )}
+            onClick={() =>
+              initializeConnection(
+                user?.id
+                  ? {
+                      id: user.id,
+                      jid: `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}`,
+                    }
+                  : null,
+                accessToken,
+                getContactName
+              )
+            }
             className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
           >
             Retry Connection
@@ -157,81 +191,85 @@ const ChatPage: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen flex ${
+      className={`h-screen flex ${
         isDarkMode ? "dark:bg-[var(--background)]" : "bg-gray-100"
       } text-[var(--foreground)]`}
     >
       <SidebarNav onClose={() => {}} currentPath={pathname} />
-      <div className="flex-1 flex ml-20">
-        <RoomList
-          conversations={conversations}
-          activeConversation={activeConversation}
-          connected={connected}
-          onConversationSelect={(jid) => {
-            setRecipientJid(jid);
-            setActiveConversation(jid);
-            startConversation(jid, getContactName);
-          }}
-        />
-        <div className="flex-1 flex flex-col">
-          {activeConversation ? (
-            <>
-              <ChatHeader
-                activeConversation={activeConversation}
-                conversationName={
-                  getContactName(
-                    activeConversation.split("@")[0],
-                    user?.id
-                  ) || activeConversation
-                }
-                getAvatarColor={getAvatarColor}
-                onCallClick={() => console.log("Voice call")}
-                onVideoClick={() => console.log("Video call")}
-                setShowUserInfoModal={setShowUserInfoModal}
-              />
-              <div className="flex-1 overflow-y-auto">
-                <MessageList
-                  messages={getActiveMessages()}
-                  loadingHistory={false} // Managed by store
+      <div className="flex-1 flex flex-col ml-20 h-full">
+        <div className="flex flex-1 h-[calc(100vh-4rem)]">
+          <RoomList
+            conversations={conversations}
+            activeConversation={activeConversation}
+            connected={connected}
+            onConversationSelect={(jid) => {
+              setRecipientJid(jid);
+              setActiveConversation(jid);
+              startConversation(jid, getContactName);
+            }}
+          />
+          <div className="flex-1 flex flex-col h-full">
+            {activeConversation ? (
+              <>
+                <ChatHeader
                   activeConversation={activeConversation}
+                  conversationName={
+                    getContactName(
+                      activeConversation.split("@")[0],
+                      user?.id
+                    ) || activeConversation
+                  }
+                  getAvatarColor={getAvatarColor}
+                  onCallClick={() => console.log("Voice call")}
+                  onVideoClick={() => console.log("Video call")}
+                  setShowUserInfoModal={setShowUserInfoModal}
                 />
-              </div>
-              <ChatInput
-                messageText={messageText}
-                setMessageText={setMessageText}
-                onSendMessage={handleSendMessage}
-                connected={connected}
-                currentUserId={user?.id}
-                activeConversation={activeConversation}
-                activeGroupJid={activeConversation}
-                addMessage={(message) => {
-                  const newMessage: Message = {
-                    id: message.id,
-                    from: user?.id ? `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}` : "",
-                    to: message.conversationId,
-                    text: message.content,
-                    timestamp: message.sentAt,
-                    isOwn: true,
-                  };
-                  set((state) => ({
-                    messages: [...state.messages, newMessage],
-                  }));
-                }}
-              />
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="w-60 h-60 flex items-center justify-center mx-auto mb-4">
-                  <img
-                    src="/empty1.svg"
-                    alt="Group Avatar"
-                    className="w-full h-full"
+                <div className="flex-1 overflow-y-auto">
+                  <MessageList
+                    messages={getActiveMessages()}
+                    loadingHistory={false} // Managed by store
+                    activeConversation={activeConversation}
                   />
                 </div>
+                <ChatInput
+                  messageText={messageText}
+                  setMessageText={setMessageText}
+                  onSendMessage={handleSendMessage}
+                  connected={connected}
+                  currentUserId={user?.id}
+                  activeConversation={activeConversation}
+                  activeGroupJid={activeConversation}
+                  addMessage={(message) => {
+                    const newMessage: Message = {
+                      id: message.id,
+                      from: user?.id
+                        ? `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}`
+                        : "",
+                      to: message.conversationId,
+                      text: message.content,
+                      timestamp: message.sentAt,
+                      isOwn: true,
+                    };
+                    set((state) => ({
+                      messages: [...state.messages, newMessage],
+                    }));
+                  }}
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-60 h-60 flex items-center justify-center mx-auto mb-4">
+                    <img
+                      src="/empty1.svg"
+                      alt="Group Avatar"
+                      className="w-full h-full"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
       <NewChatModal
@@ -248,7 +286,7 @@ const ChatPage: React.FC = () => {
           addGroupMember={addGroupMember}
           removeGroupMember={removeGroupMember}
           exitGroup={exitGroup}
-          connection={null} 
+          connection={null}
           connected={connected}
         />
       )}
