@@ -17,6 +17,20 @@ interface FriendRequest {
   sender_name?: string;
 }
 
+interface UserDetail {
+  first_name: string;
+  last_name: string;
+}
+
+interface FriendRequestResponse {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: string;
+  createdAt: string;
+  user_detail?: UserDetail;
+}
+
 interface ContactsState {
   contacts: Contact[];
   friendRequests: FriendRequest[];
@@ -99,7 +113,7 @@ export const useContactsStore = create<ContactsState>()(
           }
           const data = await response.json();
           const friendRequests = Array.isArray(data.results)
-            ? data.results.map((req: any) => ({
+            ? data.results.map((req: FriendRequestResponse) => ({
                 id: req.id,
                 sender_id: req.sender_id,
                 receiver_id: req.receiver_id,
