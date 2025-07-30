@@ -123,22 +123,6 @@ const ChatPage: React.FC = () => {
     }
   };
 
-  if (isCheckingAuth) {
-    return (
-      <div
-        className={`h-screen flex items-center justify-center ${
-          isDarkMode ? "dark:bg-[var(--background)]" : "bg-gray-100"
-        } text-[var(--foreground)]`}
-      >
-        <div className="flex flex-col items-center space-y-4">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          <span className="text-gray-600 dark:text-white text-sm">
-            Checking authentication...
-          </span>
-        </div>
-      </div>
-    );
-  }
 
   if (connectionError) {
     return (

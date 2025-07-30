@@ -1,38 +1,24 @@
-
+// middleware.ts (place this at project root, same level as src/ folder)
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_USER_API_BASE_URL;
+const API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_BASE_URL;
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
-const PROTECTED_ROUTES = ['/chat', '/calls', '/settings', '/wallet'];
+// Protected routes that require authentication
+const PROTECTED_ROUTES = ['/chat', '/wallet', '/settings', '/calls', '/feeds'];
 
-function isTokenExpired(token: string): boolean {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const currentTime = Math.floor(Date.now() / 1000);
-    return payload.exp < currentTime;
-  } catch {
-    return true; 
-  }
-}
-
-async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string } | null> {
-  if (!API_BASE_URL || !API_KEY) {
-    console.error('Missing API_BASE_URL or API_KEY environment variables');
-    return null;
-  }
-
+async function refreshToken(refreshTokenValue: string) {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': API_KEY,
+        'x-api-key': API_KEY!,
       },
       body: JSON.stringify({
-        refresh_token: refreshToken,
+        refresh_token: refreshTokenValue,
         source: 'web',
-        user_type: 'client'
+        user_type: 'client',
       }),
     });
 
@@ -40,95 +26,96 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
       return null;
     }
 
-    const data = await response.json();
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token || refreshToken
-    };
-  } catch {
+    return await response.json();
+  } catch (error) {
+    console.error('Token refresh failed:', error);
     return null;
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const currentTime = Math.floor(Date.now() / 1000);
+    // Check if token expires within the next 5 minutes
+    return payload.exp < (currentTime + 300);
+  } catch (error) {
+    return true;
   }
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  
+  // Skip middleware for static files, API routes, and non-protected routes
+  if (
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/api/') ||
+    pathname.includes('.') ||
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname.startsWith('/auth/')
+  ) {
+    return NextResponse.next();
+  }
 
-  // Check if the current path is a protected route
-  const isProtectedRoute = PROTECTED_ROUTES.some(route => 
-    pathname.startsWith(route)
-  );
-
+  // Check if it's a protected route
+  const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  
   if (!isProtectedRoute) {
     return NextResponse.next();
   }
 
-  // Get tokens from cookies (Next.js middleware can't access localStorage)
+  // Get tokens from cookies
   const accessToken = request.cookies.get('access_token')?.value;
-  const refreshToken = request.cookies.get('refresh_token')?.value;
+  const refreshTokenValue = request.cookies.get('refresh_token')?.value;
 
-  // If no access token, redirect to login
-  if (!accessToken) {
-    const loginUrl = new URL('/auth/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
+  // No tokens available, redirect to login
+  if (!accessToken && !refreshTokenValue) {
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Check if access token is expired
-  if (isTokenExpired(accessToken)) {
-    // Try to refresh the token
-    if (refreshToken) {
-      const newTokens = await refreshAccessToken(refreshToken);
+  // Check if access token is valid
+  if (accessToken && !isTokenExpired(accessToken)) {
+    return NextResponse.next();
+  }
+
+  // Try to refresh token if access token is expired
+  if (refreshTokenValue) {
+    const refreshResponse = await refreshToken(refreshTokenValue);
+    
+    if (refreshResponse && refreshResponse.tokens) {
+      // Create response and set new tokens
+      const response = NextResponse.next();
       
-      if (newTokens) {
-        // Create response and set new cookies
-        const response = NextResponse.next();
-        response.cookies.set('access_token', newTokens.accessToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 7 // 7 days
-        });
-        response.cookies.set('refresh_token', newTokens.refreshToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 30 // 30 days
-        });
-        
-        // Set headers for client-side to update localStorage
-        response.headers.set('x-new-access-token', newTokens.accessToken);
-        response.headers.set('x-new-refresh-token', newTokens.refreshToken);
-        
-        return response;
-      }
+      // Set new tokens in cookies
+      response.cookies.set('access_token', refreshResponse.tokens.access_token, {
+        httpOnly: false, // Allow JavaScript access for client-side store
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24, // 24 hours
+        path: '/',
+      });
+
+      response.cookies.set('refresh_token', refreshResponse.tokens.refresh_token, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: '/',
+      });
+
+      return response;
     }
-    
-    // Refresh failed, redirect to login
-    const loginUrl = new URL('/auth/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    const response = NextResponse.redirect(loginUrl);
-    
-    // Clear invalid cookies
-    response.cookies.delete('access_token');
-    response.cookies.delete('refresh_token');
-    
-    return response;
   }
 
-  // Token is valid, proceed
-  return NextResponse.next();
+  // No valid tokens, redirect to login
+  return NextResponse.redirect(new URL('/login', request.url));
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

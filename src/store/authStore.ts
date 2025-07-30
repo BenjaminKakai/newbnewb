@@ -53,6 +53,7 @@ interface AuthState {
   isLoading: boolean;
   isLoggingOut: boolean;
   error: string | null;
+  isRefreshing: boolean;
 
   signIn: (credentials: {
     phoneNumber: string;
@@ -76,6 +77,7 @@ interface AuthState {
     userType: string;
   }) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
+  refreshTokens: () => Promise<boolean>;
   logout: () => Promise<void>;
   logoutLocal: () => void;
   clearError: () => void;
@@ -86,6 +88,7 @@ interface AuthState {
   getAuthHeaders: () => Record<string, string>;
   isTokenValid: () => boolean;
   refreshUserData: () => Promise<void>;
+  updateTokensFromMiddleware: (accessToken: string, refreshToken: string) => void;
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_AUTH_API_BASE_URL;
@@ -104,6 +107,38 @@ const getDefaultHeaders = (accessToken?: string) => {
   return headers;
 };
 
+// Helper function to check if token is expired
+const isTokenExpired = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const currentTime = Math.floor(Date.now() / 1000);
+    // Check if token expires within the next 5 minutes (300 seconds)
+    return payload.exp < (currentTime + 300);
+  } catch (error) {
+    console.error('Error parsing token:', error);
+    return true;
+  }
+};
+
+// Helper function to set tokens in cookies
+const setTokenCookies = (accessToken: string, refreshToken: string) => {
+  // Set access token cookie
+  document.cookie = `access_token=${accessToken}; path=/; max-age=${60 * 60 * 24}; SameSite=Strict${
+    process.env.NODE_ENV === 'production' ? '; Secure' : ''
+  }`;
+  
+  // Set refresh token cookie
+  document.cookie = `refresh_token=${refreshToken}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Strict${
+    process.env.NODE_ENV === 'production' ? '; Secure' : ''
+  }`;
+};
+
+// Helper function to clear token cookies
+const clearTokenCookies = () => {
+  document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+  document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+};
+
 export const useAuthStore = create<AuthState>()(
   devtools(
     persist(
@@ -116,6 +151,7 @@ export const useAuthStore = create<AuthState>()(
         isLoading: false,
         isLoggingOut: false,
         error: null,
+        isRefreshing: false,
 
         signIn: async (credentials) => {
           set({ isLoading: true, error: null });
@@ -269,11 +305,17 @@ export const useAuthStore = create<AuthState>()(
               idNumberVerified: data.user.id_number_verified,
             };
 
+            // Store tokens in localStorage and cookies
             localStorage.setItem("access_token", data.tokens.access_token);
             if (data.tokens.refresh_token) {
               localStorage.setItem("refresh_token", data.tokens.refresh_token);
             }
             localStorage.setItem("user_data", JSON.stringify(userData));
+
+            // Set tokens in cookies for middleware
+            if (typeof window !== 'undefined') {
+              setTokenCookies(data.tokens.access_token, data.tokens.refresh_token);
+            }
 
             set({
               accessToken: data.tokens.access_token,
@@ -322,6 +364,11 @@ export const useAuthStore = create<AuthState>()(
               localStorage.setItem("refresh_token", refreshToken);
             }
 
+            // Set tokens in cookies for middleware
+            if (typeof window !== 'undefined' && refreshToken) {
+              setTokenCookies(accessToken, refreshToken);
+            }
+
             const userData: User = {
               id: user.id,
               name: `${user.first_name} ${user.last_name}`.trim(),
@@ -361,6 +408,115 @@ export const useAuthStore = create<AuthState>()(
             });
             throw error;
           }
+        },
+
+        refreshTokens: async () => {
+          const { refreshToken, isRefreshing } = get();
+          
+          // Prevent multiple simultaneous refresh attempts
+          if (isRefreshing) {
+            return false;
+          }
+
+          if (!refreshToken) {
+            console.warn("No refresh token available");
+            return false;
+          }
+
+          set({ isRefreshing: true, error: null });
+
+          try {
+            const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+              method: "POST",
+              headers: getDefaultHeaders(),
+              body: JSON.stringify({
+                refresh_token: refreshToken,
+                source: "web",
+                user_type: "client",
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error("Token refresh failed");
+            }
+
+            const data = await response.json();
+
+            // Update localStorage
+            localStorage.setItem("access_token", data.tokens.access_token);
+            localStorage.setItem("refresh_token", data.tokens.refresh_token);
+
+            // Update cookies for middleware
+            if (typeof window !== 'undefined') {
+              setTokenCookies(data.tokens.access_token, data.tokens.refresh_token);
+            }
+
+            // Update user data if returned
+            if (data.user) {
+              const userData: User = {
+                id: data.user.id,
+                name: `${data.user.first_name} ${data.user.last_name}`.trim(),
+                email: data.user.email,
+                phone: data.user.phone_number,
+                avatar: data.user.profile_picture,
+                role: "member" as const,
+                username: data.user.username,
+                firstName: data.user.first_name,
+                lastName: data.user.last_name,
+                kycStatus: data.user.kyc_status,
+                kycLevel: data.user.kyc_level,
+                verificationStatus: data.user.verification_status,
+                phoneVerified: data.user.phone_verified,
+                emailVerified: data.user.email_verified,
+                idNumberVerified: data.user.id_number_verified,
+                gender: data.user.gender,
+              };
+
+              localStorage.setItem("user_data", JSON.stringify(userData));
+              
+              set({
+                accessToken: data.tokens.access_token,
+                refreshToken: data.tokens.refresh_token,
+                user: userData,
+                isRefreshing: false,
+                error: null,
+              });
+            } else {
+              set({
+                accessToken: data.tokens.access_token,
+                refreshToken: data.tokens.refresh_token,
+                isRefreshing: false,
+                error: null,
+              });
+            }
+
+            console.log("Tokens refreshed successfully");
+            return true;
+          } catch (error) {
+            console.error("Token refresh failed:", error);
+            set({
+              isRefreshing: false,
+              error: error instanceof Error ? error.message : "Token refresh failed",
+            });
+
+            // If refresh fails, logout the user
+            get().logoutLocal();
+            return false;
+          }
+        },
+
+        updateTokensFromMiddleware: (accessToken: string, refreshToken: string) => {
+          // Update localStorage
+          localStorage.setItem("access_token", accessToken);
+          localStorage.setItem("refresh_token", refreshToken);
+
+          // Update state
+          set({
+            accessToken,
+            refreshToken,
+          });
+
+          console.log("Tokens updated from middleware");
         },
 
         resendOtp: async ({ userId, source, userType }) => {
@@ -456,6 +612,11 @@ export const useAuthStore = create<AuthState>()(
               localStorage.removeItem("user_data");
               localStorage.removeItem("auth-storage");
 
+              // Clear cookies
+              if (typeof window !== 'undefined') {
+                clearTokenCookies();
+              }
+
               const keysToRemove = [];
               for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
@@ -481,6 +642,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               isLoading: false,
               isLoggingOut: false,
+              isRefreshing: false,
               error: null,
             });
           }
@@ -492,6 +654,11 @@ export const useAuthStore = create<AuthState>()(
             localStorage.removeItem("refresh_token");
             localStorage.removeItem("user_data");
             localStorage.removeItem("auth-storage");
+
+            // Clear cookies
+            if (typeof window !== 'undefined') {
+              clearTokenCookies();
+            }
 
             const keysToRemove = [];
             for (let i = 0; i < localStorage.length; i++) {
@@ -521,6 +688,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             isLoading: false,
             isLoggingOut: false,
+            isRefreshing: false,
             error: null,
           });
         },
@@ -566,7 +734,10 @@ export const useAuthStore = create<AuthState>()(
 
         isTokenValid: () => {
           const { accessToken, isAuthenticated } = get();
-          return isAuthenticated && !!accessToken;
+          if (!isAuthenticated || !accessToken) {
+            return false;
+          }
+          return !isTokenExpired(accessToken);
         },
 
         refreshUserData: async () => {
@@ -646,18 +817,21 @@ export const useIdNumberVerified = () =>
   useAuthStore((state) => state.user?.idNumberVerified || false);
 
 export const useTokenValidation = () => {
-  const { isAuthenticated, isTokenValid, logoutLocal } = useAuthStore();
+  const { isAuthenticated, isTokenValid, logoutLocal, refreshTokens } = useAuthStore();
 
   React.useEffect(() => {
     if (isAuthenticated && !isTokenValid()) {
-      console.warn("Invalid token detected, logging out locally");
-      logoutLocal();
+      console.warn("Invalid token detected, attempting refresh...");
+      refreshTokens().catch(() => {
+        console.warn("Token refresh failed, logging out locally");
+        logoutLocal();
+      });
     }
-  }, [isAuthenticated, isTokenValid, logoutLocal]);
+  }, [isAuthenticated, isTokenValid, logoutLocal, refreshTokens]);
 };
 
 export const useAuthInit = () => {
-  const { setUser, isAuthenticated } = useAuthStore();
+  const { setUser, isAuthenticated, updateTokensFromMiddleware } = useAuthStore();
 
   React.useEffect(() => {
     const storedToken = localStorage.getItem("access_token");
@@ -676,6 +850,56 @@ export const useAuthInit = () => {
       }
     }
   }, [setUser, isAuthenticated]);
+
+  // Listen for token updates from middleware
+  React.useEffect(() => {
+    const handleMiddlewareTokenUpdate = () => {
+      const newAccessToken = document.querySelector('meta[name="x-new-access-token"]')?.getAttribute('content');
+      const newRefreshToken = document.querySelector('meta[name="x-new-refresh-token"]')?.getAttribute('content');
+      
+      if (newAccessToken && newRefreshToken) {
+        updateTokensFromMiddleware(newAccessToken, newRefreshToken);
+        
+        // Clean up the meta tags
+        document.querySelector('meta[name="x-new-access-token"]')?.remove();
+        document.querySelector('meta[name="x-new-refresh-token"]')?.remove();
+      }
+    };
+
+    // Check for token updates on page load
+    handleMiddlewareTokenUpdate();
+
+    // Listen for custom events from middleware
+    window.addEventListener('tokenRefreshed', handleMiddlewareTokenUpdate);
+    
+    return () => {
+      window.removeEventListener('tokenRefreshed', handleMiddlewareTokenUpdate);
+    };
+  }, [updateTokensFromMiddleware]);
+};
+
+export const usePeriodicTokenRefresh = () => {
+  const { isAuthenticated, isTokenValid, refreshTokens } = useAuthStore();
+
+  React.useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const checkAndRefreshToken = async () => {
+      if (!isTokenValid()) {
+        console.log("Token expired, refreshing...");
+        try {
+          await refreshTokens();
+        } catch (error) {
+          console.error("Periodic token refresh failed:", error);
+        }
+      }
+    };
+
+    // Check token validity every 5 minutes
+    const interval = setInterval(checkAndRefreshToken, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, isTokenValid, refreshTokens]);
 };
 
 export const useKycFlow = () => {

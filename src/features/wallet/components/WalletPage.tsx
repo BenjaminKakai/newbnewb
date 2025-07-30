@@ -37,7 +37,6 @@ interface TransactionFormData {
 const WalletPage: React.FC = () => {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true); // State to handle auth check
 
   // Get wallet data from Zustand store
   const {
@@ -78,31 +77,13 @@ const WalletPage: React.FC = () => {
     recipientPhone: "",
   });
 
-  // Authentication check
-  useEffect(() => {
-    const checkAuthStatus = () => {
-      setIsCheckingAuth(true);
-
-      if (!isAuthenticated || !user) {
-        router.replace("/login"); // Redirect to login if not authenticated
-        return;
-      }
-
-      setTimeout(() => {
-        setIsCheckingAuth(false); // Allow rendering after auth check
-      }, 100);
-    };
-
-    checkAuthStatus();
-  }, [isAuthenticated, user, router]);
-
   // Initialize wallet data when component mounts
   useEffect(() => {
-    if (user && isAuthenticated && !isCheckingAuth) {
+    if (user && isAuthenticated) {
       refreshWallet();
       refreshTransactions();
     }
-  }, [user, isAuthenticated, isCheckingAuth, refreshWallet, refreshTransactions]);
+  }, [user, isAuthenticated, refreshWallet, refreshTransactions]);
 
   // Handle payment results
   useEffect(() => {
@@ -391,18 +372,6 @@ const WalletPage: React.FC = () => {
     }
   };
 
-  // Render loading state during auth check
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          <span className="text-[var(--foreground)] text-sm">Checking authentication...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-screen flex overflow-hidden">
       {/* Sidebar Navigation */}
@@ -413,9 +382,7 @@ const WalletPage: React.FC = () => {
         <div className="flex-1 p-4 md:p-6 lg:p-8 xl:p-10 flex flex-col overflow-hidden">
           {/* Header */}
           <div className="flex justify-between items-center mb-6 flex-shrink-0">
-            <h1 className="text-xl md:text-2xl font-bold ">
-              Your Wallet
-            </h1>
+            <h1 className="text-xl md:text-2xl font-bold ">Your Wallet</h1>
           </div>
 
           {/* Main Layout - Two Columns */}
@@ -438,9 +405,7 @@ const WalletPage: React.FC = () => {
               {/* Latest Transaction Section */}
               <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                  <h3 className="text-lg font-semibold ">
-                    Latest Transaction
-                  </h3>
+                  <h3 className="text-lg font-semibold ">Latest Transaction</h3>
                   <button
                     onClick={handleShowAllTransactions}
                     className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
@@ -470,9 +435,7 @@ const WalletPage: React.FC = () => {
         <div className="fixed inset-0  text-[var(--foreground)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[var(--background)] text-[var(--foreground)] rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold">
-                {getModalTitle()}
-              </h3>
+              <h3 className="text-lg font-semibold">{getModalTitle()}</h3>
               <button
                 onClick={closeModal}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-100 rounded-full transition-colors"
@@ -615,9 +578,7 @@ const WalletPage: React.FC = () => {
         <div className="fixed inset-0 bg-[var(--background)]/50 text-[var(--foreground)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className=" rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold ">
-                Transaction Details
-              </h3>
+              <h3 className="text-lg font-semibold ">Transaction Details</h3>
               <button
                 onClick={closeTransactionDetailsModal}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
@@ -750,9 +711,7 @@ const WalletPage: React.FC = () => {
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
               <div>
-                <h3 className="text-xl font-semibold ">
-                  All Transactions
-                </h3>
+                <h3 className="text-xl font-semibold ">All Transactions</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   {filteredTransactions.length} transactions found
                 </p>
@@ -937,9 +896,7 @@ const WalletPage: React.FC = () => {
         <div className="fixed inset-0 bg-[var(--background)] text-[var(--foreground)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold ">
-                Request Refund
-              </h3>
+              <h3 className="text-lg font-semibold ">Request Refund</h3>
               <button
                 onClick={closeRefundModal}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"

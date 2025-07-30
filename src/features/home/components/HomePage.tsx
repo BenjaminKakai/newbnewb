@@ -66,7 +66,6 @@ export default function WasaaChatHomepage() {
     }
   }, [otpSent]);
 
-
   const handleSubmit = async () => {
     const fullPhoneNumber = `${selectedCountry.dialCode}${phoneNumber}`;
     setLoading(true);
@@ -154,7 +153,9 @@ export default function WasaaChatHomepage() {
       router.push(nextStep || "/chat");
     } catch (err) {
       console.error("Failed to verify OTP:", err);
-      toast.error(err instanceof Error ? err.message : "OTP verification failed");
+      toast.error(
+        err instanceof Error ? err.message : "OTP verification failed"
+      );
     } finally {
       setLoading(false);
     }
@@ -310,148 +311,151 @@ export default function WasaaChatHomepage() {
               Grow your tribe. Boost your hustle. Only on WasaaChat, built for
               your vibe.
             </p>
-            {!otpSent ? (
-              <div className="flex flex-col md:flex-row gap-4 mb-4">
-                <div className="flex items-center border border-gray-300 rounded-full px-4 py-2 w-full md:w-1/2">
-                  <span className="mr-2">{selectedCountry.flag}</span>
-                  <select
-                    className="bg-transparent text-sm w-full focus:outline-none text-[var(--foreground)]"
-                    value={selectedCountry.code}
-                    onChange={(e) =>
-                      setSelectedCountry(
-                        countries.find((c) => c.code === e.target.value) ||
-                          countries[0]
-                      )
-                    }
-                  >
-                    {countries.map((country) => (
-                      <option key={country.code} value={country.code}>
-                        {country.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-center border border-gray-300 rounded-full px-4 py-2 w-full md:w-1/2">
-                  <span className="mr-2 text-[var(--foreground)]">
-                    {selectedCountry.dialCode}
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="\d*"
-                    placeholder="Your Phone number"
-                    className="bg-transparent w-full text-sm focus:outline-none text-[var(--foreground)]"
-                    value={phoneNumber}
-                    onChange={(e) =>
-                      setPhoneNumber(e.target.value.replace(/\D/g, ""))
-                    }
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4 mb-4">
-                <div className="flex justify-center space-x-3">
-                  {otp.map((digit, index) => (
-                    <input
-                      key={index}
-                      ref={(el) => (otpRefs.current[index] = el)}
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      value={digit}
-                      onChange={(e) => handleOtpChange(index, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(e, index)}
-                      className="w-12 h-12 text-center text-[var(--foreground)] text-xl font-bold border-2 border-gray-300 rounded-lg focus:border-[#2A8FEA] focus:outline-none transition-colors"
-                      disabled={loading}
-                    />
-                  ))}
-                </div>
-                <div className="flex justify-between">
-                  <button
-                    onClick={handleOtpClear}
-                    className="text-sm text-[#2A8FEA] hover:underline"
-                  >
-                    Clear OTP
-                  </button>
-                  <button
-                    onClick={handleOtpSubmit}
-                    disabled={loading || otp.join("").length !== 6}
-                    className={`bg-[#2A8FEA] text-white px-6 py-2 rounded-full text-sm hover:bg-blue-700 flex items-center justify-center gap-2 ${
-                      loading || otp.join("").length !== 6
-                        ? "opacity-50 cursor-not-allowed"
-                        : ""
-                    }`}
-                  >
-                    {loading && (
-                      <svg
-                        className="animate-spin h-4 w-4 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
+
+            {/* Only show input fields if user is not logged in */}
+            {!user && (
+              <>
+                {!otpSent ? (
+                  <div className="flex flex-col md:flex-row gap-4 mb-4">
+                    <div className="flex items-center border border-gray-300 rounded-full px-4 py-2 w-full md:w-1/2">
+                      <span className="mr-2">{selectedCountry.flag}</span>
+                      <select
+                        className="bg-transparent text-sm w-full focus:outline-none text-[var(--foreground)]"
+                        value={selectedCountry.code}
+                        onChange={(e) =>
+                          setSelectedCountry(
+                            countries.find((c) => c.code === e.target.value) ||
+                              countries[0]
+                          )
+                        }
                       >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8v8H4z"
-                        ></path>
-                      </svg>
-                    )}
-                    {loading ? "Verifying OTP..." : "Submit OTP"}
-                  </button>
-                </div>
-              </div>
-            )}
-            {!otpSent && phoneNumber.length === 9 && (
-              <div className="transition-opacity duration-300 ease-in-out opacity-100 animate-fade-in">
-                <button
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="bg-[#2A8FEA] w-full cursor-pointer text-white px-6 py-2 rounded-full text-sm hover:bg-[#2A8FEA] mb-4 flex items-center justify-center gap-2"
-                >
-                  {loading && (
-                    <svg
-                      className="animate-spin h-4 w-4 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
+                        {countries.map((country) => (
+                          <option key={country.code} value={country.code}>
+                            {country.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center border border-gray-300 rounded-full px-4 py-2 w-full md:w-1/2">
+                      <span className="mr-2 text-[var(--foreground)]">
+                        {selectedCountry.dialCode}
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="\d*"
+                        placeholder="Your Phone number"
+                        className="bg-transparent w-full text-sm focus:outline-none text-[var(--foreground)]"
+                        value={phoneNumber}
+                        onChange={(e) =>
+                          setPhoneNumber(e.target.value.replace(/\D/g, ""))
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 mb-4">
+                    <div className="flex justify-center space-x-3">
+                      {otp.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={(el) => (otpRefs.current[index] = el)}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={6}
+                          value={digit}
+                          onChange={(e) =>
+                            handleOtpChange(index, e.target.value)
+                          }
+                          onKeyDown={(e) => handleOtpKeyDown(e, index)}
+                          className="w-12 h-12 text-center text-[var(--foreground)] text-xl font-bold border-2 border-gray-300 rounded-lg focus:border-[#2A8FEA] focus:outline-none transition-colors"
+                          disabled={loading}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex">
+                      <button
+                        onClick={handleOtpSubmit}
+                        disabled={loading || otp.join("").length !== 6}
+                        className={`bg-[#2A8FEA] text-white px-6 py-2 rounded-full text-sm hover:bg-blue-700 flex items-center justify-center gap-2 w-full ${
+                          loading || otp.join("").length !== 6
+                            ? "opacity-50 cursor-not-allowed"
+                            : ""
+                        }`}
+                      >
+                        {loading && (
+                          <svg
+                            className="animate-spin h-4 w-4 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v8H4z"
+                            ></path>
+                          </svg>
+                        )}
+                        {loading ? "Verifying OTP..." : "Submit OTP"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!otpSent && phoneNumber.length === 9 && (
+                  <div className="transition-opacity duration-300 ease-in-out opacity-100 animate-fade-in">
+                    <button
+                      onClick={handleSubmit}
+                      disabled={loading}
+                      className="bg-[#2A8FEA] w-full cursor-pointer text-white px-6 py-2 rounded-full text-sm hover:bg-[#2A8FEA] mb-4 flex items-center justify-center gap-2"
                     >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v8H4z"
-                      ></path>
-                    </svg>
-                  )}
-                  {loading ? "Sending OTP..." : "Get OTP"}
-                </button>
-              </div>
+                      {loading && (
+                        <svg
+                          className="animate-spin h-4 w-4 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v8H4z"
+                          ></path>
+                        </svg>
+                      )}
+                      {loading ? "Sending OTP..." : "Get OTP"}
+                    </button>
+                  </div>
+                )}
+                <label className="flex items-center text-sm mb-6">
+                  <input
+                    type="checkbox"
+                    className="mr-2"
+                    checked={keepSignedIn}
+                    onChange={(e) => setKeepSignedIn(e.target.checked)}
+                  />
+                  Keep me signed in
+                </label>
+              </>
             )}
-            <label className="flex items-center text-sm mb-6">
-              <input
-                type="checkbox"
-                className="mr-2"
-                checked={keepSignedIn}
-                onChange={(e) => setKeepSignedIn(e.target.checked)}
-              />
-              Keep me signed in
-            </label>
+
             <p className="text-sm mb-6">
               Join <span className="font-semibold">50,000+</span> Africans
               already earning and connecting.
@@ -734,7 +738,7 @@ export default function WasaaChatHomepage() {
         </div>
       </section>
 
-      <section className="flex flex-col md:flex-row justify-between items-center px-6 md:px-32 py-20 bg-[var(--background)]">
+      <section className="flex flex-col md:flex-row justify-between items-center px-6 md:px-32 py-14 bg-[#E7EDF2]">
         <div className="max-w-xl">
           <h1 className="text-4xl md:text-5xl font-semibold mb-6">
             Start Chatting, Earning,
@@ -751,11 +755,7 @@ export default function WasaaChatHomepage() {
               <span className="text-xs">App Store</span>
             </button>
             <button className="bg-white text-black px-5 py-2 rounded-full border border-black hover:cursor-pointer flex items-center space-x-2">
-              <img
-                className="w-4 h-4"
-                src="/android-1.svg"
-                alt="Google icon"
-              />
+              <img className="w-4 h-4" src="/android-1.svg" alt="Google icon" />
               <span className="text-xs">Google Play</span>
             </button>
           </div>

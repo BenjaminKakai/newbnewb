@@ -2,7 +2,7 @@
 
 import WalletPage from "@/features/wallet/components/WalletPage"
 
-export default function OTP() {
+export default function Wallet() {
   return <WalletPage />
 }
 

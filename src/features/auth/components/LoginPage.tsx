@@ -580,7 +580,7 @@ export const LoginPageWithPhone: React.FC = () => {
         const previousRoute =
           typeof window !== "undefined" && window.location.pathname !== "/login"
             ? window.location.pathname
-            : "/chat";
+            : "/";
         router.push(previousRoute);
         return;
       }
