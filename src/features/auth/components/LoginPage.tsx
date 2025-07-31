@@ -383,7 +383,7 @@ const QRCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     <div className="fixed inset-0 bg-white/50 dark:bg-black/50 bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-black p-8 rounded-xl shadow-2xl max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+          <h3 className="text-xl font-bold text-white">
             Sign in with QR Code
           </h3>
           <button
@@ -408,11 +408,11 @@ const QRCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         <div className="text-center">
           {/* QR Code Display */}
-          <div className="w-64 h-64 bg-white border-4 border-gray-200 rounded-lg flex items-center justify-center relative mx-auto">
+          <div className="w-64 h-64 bg-[var(--background)]  rounded-lg flex items-center justify-center relative mx-auto">
             {isGenerating && !qrCode ? (
               <div className="flex flex-col items-center space-y-3">
                 <Spinner />
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-[var(--foreground)]">
                   Generating QR Code...
                 </span>
               </div>
@@ -497,7 +497,7 @@ const CountryCodePicker: React.FC<{
         className="flex items-center space-x-1 px-3 py-2 h-full bg-transaparent rounded-2xl focus:outline-none"
       >
         <span className="text-lg">{selectedCountry.flag}</span>
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium text-[var(--foreground)]">
           {selectedCountry.dialCode}
         </span>
         <svg
@@ -518,14 +518,14 @@ const CountryCodePicker: React.FC<{
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 w-80 z-10 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className="absolute top-full left-0 w-80 z-10 bg-[var(--background)] border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           <div className="p-2">
             <input
               type="text"
               placeholder="Search countries..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:border-none"
+              className="w-full px-3 py-2 border border-gray-300 text-[var(--foreground)] rounded-md text-sm focus:outline-none focus:border-none"
             />
           </div>
           <div className="max-h-48 overflow-y-auto">
@@ -541,10 +541,10 @@ const CountryCodePicker: React.FC<{
                 className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none text-left"
               >
                 <span className="text-lg">{country.flag}</span>
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-[var(--foreground)]">
                   {country.dialCode}
                 </span>
-                <span className="text-sm text-gray-600 truncate">
+                <span className="text-sm text-[var(--foreground)] truncate">
                   {country.name}
                 </span>
               </button>
@@ -565,6 +565,7 @@ export const LoginPageWithPhone: React.FC = () => {
   const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]);
   const [isFocused, setIsFocused] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const { isDarkMode } = useTheme();
 
   const router = useRouter();
 
@@ -580,7 +581,7 @@ export const LoginPageWithPhone: React.FC = () => {
         const previousRoute =
           typeof window !== "undefined" && window.location.pathname !== "/login"
             ? window.location.pathname
-            : "/";
+            : "/chat";
         router.push(previousRoute);
         return;
       }
@@ -641,7 +642,11 @@ export const LoginPageWithPhone: React.FC = () => {
       //   background: "linear-gradient(to top right, #CFE0F7, #FFFFFF)",
       // }}
     >
-      <div className="hidden rounded-lg lg:flex lg:w-1/2 relative overflow-hidden p-4 bg-[var(--background)]">
+      <div
+        className={`hidden rounded-lg lg:flex lg:w-1/2 relative overflow-hidden p-4 ${
+          isDarkMode ? "bg-[var(--background)]" : "bg-[#2A8FEA]"
+        }`}
+      >
         {/* Background pattern */}
         <div className="">
           <div
@@ -658,7 +663,7 @@ export const LoginPageWithPhone: React.FC = () => {
             <div className="text-center">
               {/* WasaaChat Logo */}
               <div className="flex items-center justify-center mb-4">
-                <img src="/logo-bg.svg" className="" />
+                <img src="/favicon-3.svg" className="w-32" />
               </div>
             </div>
           </div>
@@ -666,14 +671,14 @@ export const LoginPageWithPhone: React.FC = () => {
           {/* Bottom content */}
           <div className="flex items-end justify-between">
             <div className="flex-1">
-              <h2 className="text-2xl font-bold text-[var(--foreground)] mb-4 leading-tight">
+              <h2 className="text-2xl font-bold text-white mb-4 leading-tight">
                 Stay close to your
                 <br />
                 people anytime,
                 <br />
                 anywhere.
               </h2>
-              <p className="text-[var(--foreground)] text-sm leading-relaxed max-w-md">
+              <p className="text-white text-sm leading-relaxed max-w-md">
                 Chat, voice, and send money – in one
                 <br />
                 Afro-inspired app.
@@ -708,7 +713,7 @@ export const LoginPageWithPhone: React.FC = () => {
                 {/* Phone Sign Up Button */}
                 <button
                   onClick={() => setShowPhoneForm(true)}
-                  className="w-full bg-[#2A8FEA] text-[var(--foreground)] py-2 px-6 mt-8 rounded-2xl font-medium hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2"
+                  className="w-full bg-[#2A8FEA] text-white cursor-pointer py-2 px-6 mt-8 rounded-2xl font-medium hover:bg-gray-600 transition-colors flex items-center justify-center space-x-2"
                 >
                   <svg
                     className="w-5 h-5"
@@ -729,7 +734,7 @@ export const LoginPageWithPhone: React.FC = () => {
                 {/* QR Code Sign In Button */}
                 <button
                   onClick={() => setShowQRCode(true)}
-                  className="w-full bg-white dark:bg-black text-[#2A8FEA] py-2 px-6 border-2 border-[#2A8FEA] rounded-2xl font-medium hover:bg-blue-50 transition-colors flex items-center justify-center space-x-2"
+                  className="w-full bg-white dark:bg-black text-white cursor-pointer py-2 px-6 rounded-2xl font-medium hover:bg-gray-600  transition-colors flex items-center justify-center space-x-2"
                 >
                   <svg
                     className="w-5 h-5"
@@ -823,7 +828,7 @@ export const LoginPageWithPhone: React.FC = () => {
 
                       {/* Phone Number Input */}
                       <input
-                        className="flex-1 px-4 bg-transparent text-[var(--foreground)] placeholder-gray-400 focus:outline-none "
+                        className="flex-1 px-4 bg-transparent text-[var(--foreground)]  focus:outline-none "
                         type="tel"
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
@@ -833,14 +838,6 @@ export const LoginPageWithPhone: React.FC = () => {
                         required
                         disabled={isLoading}
                       />
-                    </div>
-                    <div className="flex justify-end mt-2">
-                      <a
-                        href="#"
-                        className="text-xs font-bold text-blue-500 hover:text-blue-600 transition-colors"
-                      >
-                        Forgot?
-                      </a>
                     </div>
                   </div>
                   {/* Remember Device and Auth Icons */}
@@ -852,7 +849,7 @@ export const LoginPageWithPhone: React.FC = () => {
                         onChange={(e) => setRememberDevice(e.target.checked)}
                         className="w-3 h-3 text-blue-500 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                       />
-                      <span className="text-xs text-gray-600">
+                      <span className="text-xs text-[var(--foreground)]">
                         Remember this device
                       </span>
                     </label>
@@ -877,7 +874,7 @@ export const LoginPageWithPhone: React.FC = () => {
 
                   <button
                     type="submit"
-                    className={`w-full px-4 py-2 rounded-full text-sm transition-all duration-200 flex items-center justify-center space-x-2 ${
+                    className={`w-full px-4 py-2 rounded-full cursor-pointer text-sm transition-all duration-200 flex items-center justify-center space-x-2 ${
                       isLoading
                         ? "bg-gray-400 text-gray-600 cursor-not-allowed"
                         : "bg-[#2A8FEA] text-white hover:bg-bg-gray-600 hover:shadow-lg transform hover:scale-105"

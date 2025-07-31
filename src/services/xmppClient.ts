@@ -73,6 +73,8 @@ class XMPPClient {
   addMessageHandler(callback: (msg: any) => boolean) {
     if (this.connection && !this.onMessageCallback) {
       this.onMessageCallback = callback;
+
+      
       this.connection.addHandler(callback, null, "message", "chat", null, null);
     }
   }

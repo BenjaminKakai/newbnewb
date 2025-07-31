@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   HeadphonesIcon,
 } from "lucide-react";
+import { Header } from "@/components/Header";
 
 const TermsConditionsPage = () => {
   const [expandedSections, setExpandedSections] = useState({});
@@ -101,8 +102,8 @@ const TermsConditionsPage = () => {
 
   return (
     <div className="min-h-screen bg-white dark:bg-black">
-      <Header toggleDrawer={toggleDrawer} />
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <Header />
+      <div className="max-w-6xl mx-auto pt-30 px-4 py-8">
         <PageHeader />
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <TableOfContents sections={sections} />
@@ -112,67 +113,6 @@ const TermsConditionsPage = () => {
     </div>
   );
 };
-
-const Header = ({ toggleDrawer }) => (
-  <header className="sticky top-0 z-50 bg-white dark:bg-black">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="flex justify-between items-center py-4">
-        {/* Logo */}
-        <div className="flex items-center">
-          <a
-            href="/"
-            className="flex items-center transition-transform duration-200 hover:scale-105"
-            aria-label="Go to homepage"
-          >
-            <img
-              src="/dark-logo.svg"
-              alt="WasaaChat Logo"
-              className="w-36 h-10"
-            />
-          </a>
-        </div>
-
-        {/* Action Buttons - Desktop */}
-        <div className="hidden md:flex items-center space-x-6">
-          <nav className="hidden text-sm dark:text-white md:flex space-x-8">
-            <a href="#features" className="hover:text-gray-900 dark:text-white">
-              Features
-            </a>
-            <a href="#faq" className="hover:text-gray-900 dark:text-white">
-              FAQ
-            </a>
-            <a href="#apps" className="hover:text-gray-900 dark:text-white">
-              Apps
-            </a>
-          </nav>
-
-          <a
-            href="/login"
-            className="bg-[#088EF9] text-xs text-white px-6 py-2 rounded-full font-semibold cursor-pointer transition w-34 text-center"
-          >
-            Get Started
-          </a>
-          <a
-            href="/download"
-            className="bg-black flex items-center gap-1 hover:bg-black border border-white text-xs text-white cursor-pointer px-6 py-2 rounded-full font-semibold w-34 text-center"
-          >
-            <img src="/contact.svg" className="w-4 h-4" />
-            Contact Us
-          </a>
-        </div>
-
-        {/* Hamburger Menu - Mobile */}
-        <button
-          onClick={toggleDrawer}
-          className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          aria-label="Toggle menu"
-        >
-          <Menu className="w-6 h-6 text-gray-600 dark:text-white" />
-        </button>
-      </div>
-    </div>
-  </header>
-);
 
 const PageHeader = () => (
   <div className="text-left mb-12">
@@ -187,7 +127,9 @@ const PageHeader = () => (
       agree to be legally bound by these Terms.
     </p>
     <div className="mt-6 inline-flex items-center px-4 py-2 rounded-full border border-gray-300 dark:border-gray-600">
-      <span className="text-sm text-gray-700 dark:text-white">Last Updated: July 2025</span>
+      <span className="text-sm text-gray-700 dark:text-white">
+        Last Updated: July 2025
+      </span>
     </div>
   </div>
 );
@@ -238,7 +180,10 @@ const MainContent = ({ sections }) => (
 );
 
 const SectionIntroduction = () => (
-  <section id="introduction" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="introduction"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <FileText className="w-6 h-6 mr-3 text-blue-600" />
       1. Introduction
@@ -305,7 +250,10 @@ const SectionIntroduction = () => (
 );
 
 const SectionAccountRegistration = () => (
-  <section id="account-registration" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="account-registration"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <Shield className="w-6 h-6 mr-3 text-blue-600" />
       2. Account Registration and Security
@@ -332,7 +280,9 @@ const SectionAccountRegistration = () => (
             </ul>
           </div>
           <div>
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Requirements:</h4>
+            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+              Requirements:
+            </h4>
             <ul className="text-gray-700 dark:text-white text-sm space-y-1">
               <li>• Real, active mobile number under your control</li>
               <li>• No virtual numbers (VoIP) allowed</li>
@@ -381,7 +331,10 @@ const SectionAccountRegistration = () => (
 );
 
 const SectionUseOfServices = () => (
-  <section id="use-of-services" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="use-of-services"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <MessageSquare className="w-6 h-6 mr-3 text-blue-600" />
       3. Use of Services
@@ -444,7 +397,10 @@ const SectionUseOfServices = () => (
 );
 
 const SectionWalletFinancial = () => (
-  <section id="wallet-financial" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="wallet-financial"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <CreditCard className="w-6 h-6 mr-3 text-blue-600" />
       4. Wallet & Financial Services
@@ -541,7 +497,9 @@ const SectionWalletFinancial = () => (
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-1">Admin Role:</h4>
+            <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+              Admin Role:
+            </h4>
             <ul className="text-gray-700 dark:text-white text-xs space-y-1">
               <li>• Create wallet</li>
               <li>• Approve withdrawals</li>
@@ -559,7 +517,9 @@ const SectionWalletFinancial = () => (
             </ul>
           </div>
           <div>
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-1">Features:</h4>
+            <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+              Features:
+            </h4>
             <ul className="text-gray-700 dark:text-white text-xs space-y-1">
               <li>• Goal tracking</li>
               <li>• Transparent records</li>
@@ -573,7 +533,10 @@ const SectionWalletFinancial = () => (
 );
 
 const SectionContentGuidelines = () => (
-  <section id="content-guidelines" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="content-guidelines"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <Eye className="w-6 h-6 mr-3 text-blue-600" />
       5. Content Guidelines and Ownership
@@ -665,7 +628,10 @@ const SectionContentGuidelines = () => (
 );
 
 const SectionAICopilot = () => (
-  <section id="ai-copilot" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="ai-copilot"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <Settings className="w-6 h-6 mr-3 text-blue-600" />
       6. AI Copilot & Automated Features
@@ -693,7 +659,9 @@ const SectionAICopilot = () => (
             </ul>
           </div>
           <div>
-            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Limitations:</h4>
+            <h4 className="font-semibold text-gray-900 dark:text-white mb-2">
+              Limitations:
+            </h4>
             <ul className="text-gray-700 dark:text-white text-sm space-y-1">
               <li>• Not a human or live support agent</li>
               <li>• Not licensed financial/medical advisor</li>
@@ -779,7 +747,10 @@ const SectionAICopilot = () => (
 );
 
 const SectionUserConduct = () => (
-  <section id="user-conduct" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="user-conduct"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <Users className="w-6 h-6 mr-3 text-blue-600" />
       8. User Conduct and Community Safety
@@ -903,7 +874,10 @@ const SectionUserConduct = () => (
 );
 
 const SectionPlatformAvailability = () => (
-  <section id="platform-availability" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="platform-availability"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <Globe className="w-6 h-6 mr-3 text-blue-600" />
       9. Platform Availability and Technical Use
@@ -981,7 +955,10 @@ const SectionPlatformAvailability = () => (
 );
 
 const SectionLegalCompliance = () => (
-  <section id="legal-compliance" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="legal-compliance"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <Gavel className="w-6 h-6 mr-3 text-blue-600" />
       10. Legal and Regulatory Compliance
@@ -1063,7 +1040,10 @@ const SectionLegalCompliance = () => (
 );
 
 const SectionDisputeResolution = () => (
-  <section id="dispute-resolution" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="dispute-resolution"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <Gavel className="w-6 h-6 mr-3 text-blue-600" />
       11. Dispute Resolution and Governing Law
@@ -1160,7 +1140,10 @@ const SectionDisputeResolution = () => (
 );
 
 const SectionLiabilityIndemnity = () => (
-  <section id="liability-indemnity" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="liability-indemnity"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <AlertTriangle className="w-6 h-6 mr-3 text-blue-600" />
       12. Limitation of Liability and Indemnity
@@ -1232,7 +1215,10 @@ const SectionLiabilityIndemnity = () => (
 );
 
 const SectionTermination = () => (
-  <section id="termination" className="p-8 border-b border-gray-200 dark:border-gray-700">
+  <section
+    id="termination"
+    className="p-8 border-b border-gray-200 dark:border-gray-700"
+  >
     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
       <FileText className="w-6 h-6 mr-3 text-blue-600" />
       13. Termination and Account Closure
@@ -1274,7 +1260,9 @@ const SectionTermination = () => (
           <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
             13.2 Platform-Initiated Termination
           </h3>
-          <p className="text-gray-700 dark:text-white text-sm mb-2">Reasons for termination:</p>
+          <p className="text-gray-700 dark:text-white text-sm mb-2">
+            Reasons for termination:
+          </p>
           <ul className="text-gray-700 dark:text-white text-sm space-y-1">
             <li>• Repeated community guideline violations</li>
             <li>• Fraudulent transactions or scams</li>
@@ -1457,15 +1445,21 @@ const SectionContactSupport = () => (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div className="flex items-center justify-center">
               <Phone className="w-4 h-4 mr-2 text-blue-600" />
-              <span className="text-gray-700 dark:text-white">+254 793666000</span>
+              <span className="text-gray-700 dark:text-white">
+                +254 793666000
+              </span>
             </div>
             <div className="flex items-center justify-center">
               <Mail className="w-4 h-4 mr-2 text-blue-600" />
-              <span className="text-gray-700 dark:text-white">legal@wasaachat.africa</span>
+              <span className="text-gray-700 dark:text-white">
+                legal@wasaachat.africa
+              </span>
             </div>
             <div className="flex items-center justify-center">
               <Globe className="w-4 h-4 mr-2 text-blue-600" />
-              <span className="text-gray-700 dark:text-white">wasaachat.africa/legal</span>
+              <span className="text-gray-700 dark:text-white">
+                wasaachat.africa/legal
+              </span>
             </div>
           </div>
         </div>

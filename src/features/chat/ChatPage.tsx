@@ -30,6 +30,7 @@ const ChatPage: React.FC = () => {
     currentConversationDetails,
     messages,
     startConversation,
+    addMessage,
     sendMessage,
     initializeConnection,
     disconnect,
@@ -66,7 +67,7 @@ const ChatPage: React.FC = () => {
     checkAuthStatus();
 
     return () => {
-      disconnect();
+      // disconnect();
     };
   }, [
     isAuthenticated,
@@ -223,21 +224,7 @@ const ChatPage: React.FC = () => {
                   currentUserId={user?.id}
                   activeConversation={activeConversation}
                   activeGroupJid={activeConversation}
-                  addMessage={(message) => {
-                    const newMessage: Message = {
-                      id: message.id,
-                      from: user?.id
-                        ? `${user.id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}`
-                        : "",
-                      to: message.conversationId,
-                      text: message.content,
-                      timestamp: message.sentAt,
-                      isOwn: true,
-                    };
-                    set((state) => ({
-                      messages: [...state.messages, newMessage],
-                    }));
-                  }}
+                  addMessage={addMessage}
                 />
               </>
             ) : (

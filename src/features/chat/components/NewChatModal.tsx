@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useContactsStore } from '@/store/contactsStore';
+import { useAuthStore } from '@/store/authStore';
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -13,32 +15,24 @@ const NewChatModal: React.FC<NewChatModalProps> = ({
   onStartChat,
   connected
 }) => {
-  const [jid, setJid] = useState('');
-  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const { contacts, isLoadingContacts, fetchContacts } = useContactsStore();
+  const { user } = useAuthStore();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!jid.trim()) {
-      setError('Please enter a valid JID');
-      return;
+  useEffect(() => {
+    if (isOpen) {
+      fetchContacts();
     }
+  }, [isOpen, fetchContacts]);
 
-    // Basic JID validation
-    if (!jid.includes('@')) {
-      setError('JID must include domain (e.g., user@domain.com)');
-      return;
-    }
-
-    setError('');
-    onStartChat(jid.trim());
-    setJid('');
-    onClose();
-  };
+  const filteredContacts = contacts.filter(
+    contact =>
+      contact.contact_id !== user?.id &&
+      contact.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleClose = () => {
-    setJid('');
-    setError('');
+    setSearchTerm('');
     onClose();
   };
 
@@ -49,7 +43,7 @@ const NewChatModal: React.FC<NewChatModalProps> = ({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Start New Chat</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Select Contact to Chat</h2>
           <button
             onClick={handleClose}
             className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
@@ -59,79 +53,71 @@ const NewChatModal: React.FC<NewChatModalProps> = ({
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="mb-4">
-            <label htmlFor="jid" className="block text-sm font-medium text-gray-700 mb-2">
-              Enter JID (Username@Domain)
-            </label>
-            <input
-              type="text"
-              id="jid"
-              value={jid}
-              onChange={(e) => {
-                setJid(e.target.value);
-                setError('');
-              }}
-              placeholder="e.g., user@xmpp-dev.wasaachat.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              disabled={!connected}
-            />
-            {error && (
-              <p className="mt-1 text-sm text-red-600">{error}</p>
-            )}
-          </div>
-
-          <div className="mb-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <span className="text-blue-400">ℹ️</span>
-                </div>
-                <div className="ml-2">
-                  <p className="text-sm text-blue-700">
-                    Enter the full JID of the person you want to chat with. 
-                    They must be registered on the same XMPP server.
-                  </p>
-                </div>
+        <div className="p-6">
+          {connected ? (
+            <>
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Search contacts"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
-            </div>
-          </div>
-
-          {!connected && (
-            <div className="mb-4">
-              <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <span className="text-red-400">⚠️</span>
-                  </div>
-                  <div className="ml-2">
-                    <p className="text-sm text-red-700">
-                      You are not connected to the chat server. Please connect first.
-                    </p>
-                  </div>
+              {isLoadingContacts ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
+                  <p className="text-sm text-gray-500 mt-2">Loading contacts...</p>
                 </div>
-              </div>
+              ) : filteredContacts.length === 0 ? (
+                <p className="text-center text-gray-500">No contacts found</p>
+              ) : (
+                <div className="max-h-60 overflow-y-auto">
+                  {filteredContacts.map(contact => (
+                    <div
+                      key={contact.contact_id}
+                      className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => {
+                        const jid = `${contact.contact_id}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}`;
+                        onStartChat(jid);
+                        onClose();
+                      }}
+                    >
+                      {contact.avatar ? (
+                        <img
+                          src={contact.avatar}
+                          alt={contact.name}
+                          className="w-10 h-10 rounded-full mr-3"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center mr-3">
+                          <span className="text-gray-600">{contact.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
+                      <span className="text-gray-900">{contact.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-gray-500">Please connect to the chat server to start a new chat.</p>
             </div>
           )}
+        </div>
 
-          {/* Footer */}
-          <div className="flex space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:ring-2 focus:ring-gray-500"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!connected || !jid.trim()}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
-            >
-              Start Chat
-            </button>
-          </div>
-        </form>
+        {/* Footer */}
+        <div className="flex justify-end p-6 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:ring-2 focus:ring-gray-500"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );

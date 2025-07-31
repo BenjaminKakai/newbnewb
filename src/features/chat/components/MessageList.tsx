@@ -1,5 +1,4 @@
-"use client";
-
+import { ArrowRightIcon, ChevronRightIcon } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 
 interface Message {
@@ -9,6 +8,10 @@ interface Message {
   text: string;
   timestamp: Date;
   isOwn: boolean;
+  type?: "text" | "payment" | "image" | "video";
+  paymentAmount?: string;
+  imageId?: string;
+  videoId?: string;
 }
 
 interface MessageListProps {
@@ -83,9 +86,8 @@ const MessageList: React.FC<MessageListProps> = ({
   return (
     <div
       ref={messagesContainerRef}
-      className="flex-1 overflow-y-auto text-[var(--foreground)] p-6 space-y-4 relative"
+      className="flex-1 overflow-y-auto text-[var(--foreground)] bg-[var(--background)] p-6 h-full space-y-4 relative"
     >
-      {/* Fixed background element */}
       <div
         className="absolute inset-0 bg-[url('/bg-vector.png')] bg-contain bg-center bg-repeat backdrop-brightness-75 dark:backdrop-brightness-50"
         style={{ zIndex: -1 }}
@@ -143,27 +145,76 @@ const MessageList: React.FC<MessageListProps> = ({
                         message.isOwn ? "items-end" : "items-start"
                       }`}
                     >
-                      <div
-                        className={`px-4 py-2 ${
-                          message.isOwn
-                            ? "bg-[#2A8FEA] text-white"
-                            : "bg-gray-100 text-gray-900"
-                        } ${
-                          showAvatar && !message.isOwn
-                            ? "rounded-tl-sm rounded-tr-2xl rounded-bl-2xl rounded-br-2xl"
-                            : showAvatar && message.isOwn
-                            ? "rounded-tl-2xl rounded-tr-sm rounded-bl-2xl rounded-br-2xl"
-                            : isLastInGroup && !message.isOwn
-                            ? "rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-sm"
-                            : isLastInGroup && message.isOwn
-                            ? "rounded-tl-2xl rounded-tr-2xl rounded-bl-sm rounded-br-2xl"
-                            : message.isOwn
-                            ? "rounded-tl-2xl rounded-tr-sm rounded-bl-sm rounded-br-2xl"
-                            : "rounded-tl-sm rounded-tr-2xl rounded-bl-2xl rounded-br-sm"
-                        }`}
-                      >
-                        <p className="text-sm">{message.text}</p>
-                      </div>
+                      {message.type === "payment" ? (
+                        <div
+                          className={`p-4 rounded-2xl shadow-md bg-[#2A8FEA] text-white max-w-xs`}
+                        >
+                          <div className="flex justify-between items-center bg-blue-400 rounded-full px-3 py-1 mb-2">
+                            <span className="text-sm">
+                              {message.isOwn
+                                ? "You have sent"
+                                : "You have received"}
+                            </span>
+                            <ChevronRightIcon className="w-4 h-4 text-white " />
+                          </div>
+
+                          <p className="text-xl font-bold">
+                            Ksh {message.paymentAmount}
+                          </p>
+                        </div>
+                      ) : message.type === "image" ? (
+                        <div
+                          className={`p-2 rounded-2xl ${
+                            message.isOwn
+                              ? "bg-blue-500 text-white"
+                              : "bg-gray-100 text-gray-900"
+                          }`}
+                        >
+                          <img
+                            src={message.imageId}
+                            alt="Sent image"
+                            className="max-w-full rounded"
+                          />
+                          <p className="text-sm mt-1">{message.text}</p>
+                        </div>
+                      ) : message.type === "video" ? (
+                        <div
+                          className={`p-2 rounded-2xl ${
+                            message.isOwn
+                              ? "bg-blue-500 text-white"
+                              : "bg-gray-100 text-gray-900"
+                          }`}
+                        >
+                          <video
+                            controls
+                            src={message.videoId}
+                            className="max-w-full rounded"
+                          />
+                          <p className="text-sm mt-1">{message.text}</p>
+                        </div>
+                      ) : (
+                        <div
+                          className={`px-4 py-2 ${
+                            message.isOwn
+                              ? "bg-[#2A8FEA] text-white"
+                              : "bg-gray-100 text-gray-900"
+                          } ${
+                            showAvatar && !message.isOwn
+                              ? "rounded-tl-sm rounded-tr-2xl rounded-bl-2xl rounded-br-2xl"
+                              : showAvatar && message.isOwn
+                              ? "rounded-tl-2xl rounded-tr-sm rounded-bl-2xl rounded-br-2xl"
+                              : isLastInGroup && !message.isOwn
+                              ? "rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl rounded-br-sm"
+                              : isLastInGroup && message.isOwn
+                              ? "rounded-tl-2xl rounded-tr-2xl rounded-bl-sm rounded-br-2xl"
+                              : message.isOwn
+                              ? "rounded-tl-2xl rounded-tr-sm rounded-bl-sm rounded-br-2xl"
+                              : "rounded-tl-sm rounded-tr-2xl rounded-bl-2xl rounded-br-sm"
+                          }`}
+                        >
+                          <p className="text-sm">{message.text}</p>
+                        </div>
+                      )}
                       {isLastInGroup && (
                         <div
                           className={`text-xs mt-1 ${

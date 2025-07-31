@@ -15,37 +15,37 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     setIsMounted(true);
-    // Initialize theme from localStorage or system preference
+    // Initialize theme from localStorage
     const savedTheme = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme === "dark" || (!savedTheme && prefersDark);
-    
-    setIsDarkMode(initialTheme);
-    applyTheme(initialTheme);
+    if (savedTheme) {
+      setIsDarkMode(savedTheme === "dark");
+    } else {
+      // Fallback to system preference only if no saved theme
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      setIsDarkMode(prefersDark);
+    }
   }, []);
 
   useEffect(() => {
     if (isMounted) {
-      applyTheme(isDarkMode);
+      // Save theme preference to localStorage
+      localStorage.setItem("theme", isDarkMode ? "dark" : "light");
+      
+      // Update CSS variables
+      document.documentElement.style.setProperty(
+        "--background",
+        isDarkMode ? "#292929" : "#ffffff"
+      );
+      document.documentElement.style.setProperty(
+        "--foreground",
+        isDarkMode ? "#ededed" : "#171717"
+      );
+      document.documentElement.classList.toggle("dark", isDarkMode);
     }
   }, [isDarkMode, isMounted]);
 
-  const applyTheme = (isDark: boolean) => {
-    document.documentElement.style.setProperty(
-      "--background",
-      isDark ? "#292929" : "#ffffff"
-    );
-    document.documentElement.style.setProperty(
-      "--foreground",
-      isDark ? "#ededed" : "#171717"
-    );
-    document.documentElement.classList.toggle("dark", isDark);
-  };
-
   const toggleTheme = () => {
-    const newTheme = !isDarkMode;
-    setIsDarkMode(newTheme);
-    localStorage.setItem("theme", newTheme ? "dark" : "light");
+    setIsDarkMode(!isDarkMode);
   };
 
   return (

@@ -45,3 +45,16 @@ body {
     animation: fade-in 0.3s ease-out forwards;
   }
 }
+
+/* Keep existing styles, but add this at the end */
+html.dark {
+  --background: #292929;
+  --foreground: #ededed;
+  --bg-card: #3a3a3a;
+}
+
+html:not(.dark) {
+  --background: #ffffff;
+  --foreground: #171717;
+  --bg-card: #f7f7f7;
+}

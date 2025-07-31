@@ -378,34 +378,12 @@ export default function WasaaChatHomepage() {
                       <button
                         onClick={handleOtpSubmit}
                         disabled={loading || otp.join("").length !== 6}
-                        className={`bg-[#2A8FEA] text-white px-6 py-2 rounded-full text-sm hover:bg-blue-700 flex items-center justify-center gap-2 w-full ${
+                        className={`bg-[#2A8FEA] text-white px-6 py-2 rounded-full cursor-pointer text-sm hover:bg-blue-700 flex items-center justify-center gap-2 w-full ${
                           loading || otp.join("").length !== 6
                             ? "opacity-50 cursor-not-allowed"
                             : ""
                         }`}
                       >
-                        {loading && (
-                          <svg
-                            className="animate-spin h-4 w-4 text-white"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8v8H4z"
-                            ></path>
-                          </svg>
-                        )}
                         {loading ? "Verifying OTP..." : "Submit OTP"}
                       </button>
                     </div>
@@ -418,28 +396,6 @@ export default function WasaaChatHomepage() {
                       disabled={loading}
                       className="bg-[#2A8FEA] w-full cursor-pointer text-white px-6 py-2 rounded-full text-sm hover:bg-[#2A8FEA] mb-4 flex items-center justify-center gap-2"
                     >
-                      {loading && (
-                        <svg
-                          className="animate-spin h-4 w-4 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8v8H4z"
-                          ></path>
-                        </svg>
-                      )}
                       {loading ? "Sending OTP..." : "Get OTP"}
                     </button>
                   </div>
@@ -619,9 +575,9 @@ export default function WasaaChatHomepage() {
                   isCenter
                     ? "translate-y-[-20px] hover:scale-105"
                     : isLeft
-                    ? "-rotate-[4deg] hover:-rotate-[2deg]"
+                    ? "md:-rotate-[4deg] md:hover:-rotate-[2deg]"
                     : isRight
-                    ? "rotate-[4deg] hover:rotate-[2deg]"
+                    ? "md:rotate-[4deg] md:hover:rotate-[2deg]"
                     : ""
                 }`}
               >
@@ -692,7 +648,7 @@ export default function WasaaChatHomepage() {
           <p className="italic text-sm mb-6">
             —designed for how we live and hustle.
           </p>
-          <button className="bg-[#2A8FEA] text-white px-6 py-2 rounded-full text-xs font-semibold hover:bg-blue-600">
+          <button className="bg-[#2A8FEA] text-white px-6 py-2 cursor-pointer rounded-full text-xs font-semibold hover:bg-[#2A8FEA]">
             Get Started
           </button>
         </div>
@@ -738,7 +694,7 @@ export default function WasaaChatHomepage() {
         </div>
       </section>
 
-      <section className="flex flex-col md:flex-row justify-between items-center px-6 md:px-32 py-14 bg-[#E7EDF2]">
+      <section className="flex flex-col md:flex-row justify-between items-center px-6 md:px-32 py-14 ">
         <div className="max-w-xl">
           <h1 className="text-4xl md:text-5xl font-semibold mb-6">
             Start Chatting, Earning,

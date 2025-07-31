@@ -19,6 +19,7 @@ import {
   Edit,
   Search as SearchIcon,
 } from "lucide-react";
+import { Header } from "@/components/Header";
 
 const DataProtectionPage = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -62,7 +63,7 @@ const DataProtectionPage = () => {
 
   return (
     <div className="min-h-screen bg-white dark:bg-black">
-      <Header toggleDrawer={toggleDrawer} />
+      <Header />
       <div className="max-w-6xl mx-auto px-4 py-8">
         <PageHeader />
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -79,66 +80,6 @@ const DataProtectionPage = () => {
   );
 };
 
-const Header = ({ toggleDrawer }) => (
-  <header className="sticky top-0 z-50 bg-white dark:bg-black">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="flex justify-between items-center py-4">
-        {/* Logo */}
-        <div className="flex items-center">
-        <a 
-            href="/" 
-            className="flex items-center transition-transform duration-200 hover:scale-105"
-            aria-label="Go to homepage"
-          >
-            <img
-              src="/dark-logo.svg"
-              alt="WasaaChat Logo"
-              className="w-36 h-10"
-            />
-          </a>
-        </div>
-
-        {/* Action Buttons - Desktop */}
-        <div className="hidden md:flex items-center space-x-6">
-          <nav className="hidden text-sm dark:text-white md:flex space-x-8">
-            <a href="#features" className="hover:text-gray-900 dark:text-white">
-              Features
-            </a>
-            <a href="#faq" className="hover:text-gray-900 dark:text-white">
-              FAQ
-            </a>
-            <a href="#apps" className="hover:text-gray-900 dark:text-white">
-              Apps
-            </a>
-          </nav>
-
-          <a
-            href="/login"
-            className="bg-[#088EF9] text-xs text-white px-6 py-2 rounded-full font-semibold cursor-pointer transition w-34 text-center"
-          >
-            Get Started
-          </a>
-          <a
-            href="/download"
-            className="bg-black flex items-center gap-1 hover:bg-black border border-white text-xs text-white cursor-pointer px-6 py-2 rounded-full font-semibold w-34 text-center"
-          >
-            <img src="/contact.svg" className="w-4 h-4" />
-            Contact Us
-          </a>
-        </div>
-
-        {/* Hamburger Menu - Mobile */}
-        <button
-          onClick={toggleDrawer}
-          className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          aria-label="Toggle menu"
-        >
-          <Menu className="w-6 h-6 text-gray-600 dark:text-white" />
-        </button>
-      </div>
-    </div>
-  </header>
-);
 
 const PageHeader = () => (
   <div className="text-left mb-12">

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   description:
     "Stay connected with your friends and family on WasaaChat. Share moments, discover trending topics, and join conversations.",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/favicon-2.svg",
     shortcut: "/favicon-16x16.png",
     apple: "/apple-touch-icon.png",
   },

@@ -52,8 +52,8 @@ const NewGroupModal: React.FC<NewGroupModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-[var(--background)]/50 border border-gray-600 flex items-center justify-center z-50">
-      <div className="bg-[var(--background)] rounded-lg p-6 w-full max-w-md">
+    <div className="fixed inset-0 bg-[var(--background)]/50  flex items-center justify-center z-50">
+      <div className="bg-[var(--background)] border border-gray-200 rounded-lg p-6 w-full max-w-md">
         <h2 className="text-xl font-bold mb-4 text-[var(--foreground)]">
           Create New Group
         </h2>
@@ -65,7 +65,7 @@ const NewGroupModal: React.FC<NewGroupModalProps> = ({
             type="text"
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
-            className="w-full px-3 py-2 bg-[var(--background)] text-[var(--foreground)] rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-gray-200 text-[var(--foreground)] rounded-lg focus:ring-2 focus:ring-blue-500"
             placeholder="Enter group name"
           />
         </div>

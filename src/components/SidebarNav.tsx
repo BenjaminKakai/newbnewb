@@ -1,11 +1,13 @@
+
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { toast } from "react-hot-toast";
 import { Sun, Moon } from "lucide-react";
 import Link from "next/link";
+import { useTheme } from "@/providers/ThemeProvider";
 
 interface SidebarNavProps {
   onClose: () => void;
@@ -18,39 +20,11 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
   const router = useRouter();
   const pathname = usePathname();
   const currentPath = pathname || "/chat";
-  const [theme, setTheme] = useState("light");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { isDarkMode, toggleTheme } = useTheme();
 
   // Get logout functions from store
   const { user, logout, logoutLocal, isLoading } = useAuthStore();
-
-  // Initialize theme from localStorage or system preference
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia(
-      "(prefers-color-scheme: dark)"
-    ).matches;
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
-  }, []);
-
-  // Update CSS variables when theme changes
-  useEffect(() => {
-    if (theme === "dark") {
-      document.documentElement.style.setProperty("--background", "#292929");
-      document.documentElement.style.setProperty("--foreground", "#ededed");
-    } else {
-      document.documentElement.style.setProperty("--background", "#ffffff");
-      document.documentElement.style.setProperty("--foreground", "#171717");
-    }
-    // Save theme to localStorage
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  // Toggle theme
-  const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light");
-  };
 
   // Handle logout action
   const handleLogout = async () => {
@@ -104,7 +78,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
 
   // Get icon based on theme
   const getIcon = (lightIcon: string, darkIcon?: string) => {
-    if (theme === "dark" && darkIcon) {
+    if (isDarkMode && darkIcon) {
       return darkIcon;
     }
     return lightIcon;
@@ -112,7 +86,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
 
   // Get active icon based on theme
   const getActiveIcon = (lightActiveIcon: string, darkActiveIcon?: string) => {
-    if (theme === "dark" && darkActiveIcon) {
+    if (isDarkMode && darkActiveIcon) {
       return darkActiveIcon;
     }
     return lightActiveIcon;
@@ -181,7 +155,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
           onClick={() => handleNavigation("/chat")}
           className="hover:scale-110 transition-transform duration-200"
         >
-          <img src="/chat-icon.svg" alt="Logo" className="w-10 h-10" />
+          <img src="/favicon-2.svg" alt="Logo" className="w-10 h-10" />
         </button>
       </div>
 
@@ -230,23 +204,19 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
         {/* Dark Mode Toggle */}
         <button
           onClick={toggleTheme}
-          className="flex flex-col items-center p-2 cursor-pointer rounded-lg transition-all duration-200 group w-full text-gray-600 dark:text-gray-300  hover:scale-105"
-          title={
-            theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"
-          }
-          aria-label={
-            theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"
-          }
+          className="flex flex-col items-center p-2 cursor-pointer rounded-lg transition-all duration-200 group w-full text-gray-600 dark:text-gray-300 hover:scale-105"
+          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          aria-label={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
         >
           <div className="mb-1">
-            {theme === "dark" ? (
+            {isDarkMode ? (
               <Sun className="w-5 h-5 text-gray-300" />
             ) : (
               <Sun className="w-5 h-5 text-gray-600" />
             )}
           </div>
           <span className="text-xs font-medium transition-colors duration-200">
-            {theme === "dark" ? "Light" : "Dark"}
+            {isDarkMode ? "Light" : "Dark"}
           </span>
         </button>
 
@@ -289,7 +259,7 @@ const SidebarNav: React.FC<SidebarNavProps> = ({ onLogout, children }) => {
               <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin" />
             ) : (
               <img
-                src={theme === "dark" ? "/logout.svg" : "/logout.svg"}
+                src={isDarkMode ? "/logout-dark.svg" : "/logout.svg"}
                 alt="Logout"
                 className="w-5 h-5 transition-transform duration-200"
               />

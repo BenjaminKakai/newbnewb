@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useContactsStore } from "@/store/contactsStore";
 import { useSocket } from "@/services/notificationSocket";
@@ -10,6 +10,8 @@ import StatusViewerModal from "./StatusViewerModal";
 import StatusUploadModal from "./StatuUploadModal";
 import { toast } from "react-hot-toast";
 import { Bell } from "lucide-react";
+import { useTheme } from "@/providers/ThemeProvider";
+import { useChatStore } from "@/store/chatStore";
 
 interface Conversation {
   jid: string;
@@ -131,21 +133,18 @@ const StatusComponent: React.FC<{
   statusUsers: StatusUser[];
   onStatusClick: (user: StatusUser, index: number) => void;
   onAddStatusClick: () => void;
-}> = ({ statusUsers, onStatusClick, onAddStatusClick }) => {
+}> = React.memo(({ statusUsers, onStatusClick, onAddStatusClick }) => {
   return (
     <div className="text-[var(--foreground)] rounded-lg mb-4">
       <div className="flex justify-end cursor-pointer hover:underline items-center mb-4">
         <h2 className="text-sm">All Status</h2>
       </div>
 
-      <div className="flex space-x-6">
-        <div className="flex flex-col items-center space-y-3 min-w-0">
+      <div className="flex space-x-4 overflow-x-auto cursor-pointer scrollbar-hide pb-2">
+        <div className="flex flex-col items-center space-y-3 min-w-[6rem]">
           <button
-            onClick={() => {
-              console.log("Add Status button clicked");
-              onAddStatusClick();
-            }}
-            className="relative w-24 h-24 rounded-2xl bg-gray-300 flex flex-col items-center justify-center hover:bg-gray-600 transition-colors"
+            onClick={onAddStatusClick}
+            className="relative w-24 h-24 rounded-2xl cursor-pointer bg-gray-300 flex flex-col items-center justify-center hover:bg-gray-600 transition-colors"
           >
             <div className="w-4 h-4 rounded-full border-2 border-white flex items-center justify-center">
               <svg
@@ -168,82 +167,85 @@ const StatusComponent: React.FC<{
           </button>
         </div>
 
-        <div className="flex-1 grid grid-cols-2 gap-2">
-          {statusUsers.slice(0, 4).map((user, index) => (
-            <div key={user.id} className="flex flex-col items-center space-y-3">
-              <div className="relative">
-                <button
-                  onClick={() => onStatusClick(user, index)}
-                  className={`relative w-24 h-24 overflow-hidden  transition-all ${
-                    user.statuses.some((s) => !s.isViewed) ? "" : ""
-                  }`}
-                  style={{
-                    borderTopLeftRadius: "1rem",
-                    borderTopRightRadius: "1rem",
-                    borderBottomLeftRadius: "1.5rem",
-                    borderBottomRightRadius: "1.5rem",
-                  }}
-                >
-                  {user.statuses.length > 0 &&
-                  user.statuses[0].type === "image" &&
-                  user.statuses[0].imageUrl ? (
-                    <img
-                      src={user.statuses[0].imageUrl}
-                      alt={`${user.name}'s status`}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : user.statuses.length > 0 &&
-                    user.statuses[0].type === "text" ? (
-                    <div
-                      className="w-full h-full flex items-center justify-center text-xs font-medium p-3 text-center"
-                      style={{
-                        backgroundColor:
-                          user.statuses[0].backgroundColor || "#3B82F6",
-                        color: user.statuses[0].textColor || "#FFFFFF",
-                      }}
-                    >
-                      {user.statuses[0].content.length > 25
-                        ? user.statuses[0].content.substring(0, 25) + "..."
-                        : user.statuses[0].content}
-                    </div>
-                  ) : user.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-600 flex items-center justify-center text-white font-semibold text-xl">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </button>
+        {statusUsers.map((user, index) => (
+          <div
+            key={user.id}
+            className="flex flex-col items-center space-y-3 min-w-[6rem]"
+          >
+            <div className="relative">
+              <button
+                onClick={() => onStatusClick(user, index)}
+                className={`relative w-24 h-24 cursor-pointer overflow-hidden transition-all ${
+                  user.statuses.some((s) => !s.isViewed) ? "" : ""
+                }`}
+                style={{
+                  borderTopLeftRadius: "1rem",
+                  borderTopRightRadius: "1rem",
+                  borderBottomLeftRadius: "15px",
+                  borderBottomRightRadius: "15px",
+                }}
+              >
+                {user.statuses.length > 0 &&
+                user.statuses[0].type === "image" &&
+                user.statuses[0].imageUrl ? (
+                  <img
+                    src={user.statuses[0].imageUrl}
+                    alt={`${user.name}'s status`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : user.statuses.length > 0 &&
+                  user.statuses[0].type === "text" ? (
+                  <div
+                    className="w-full h-full flex items-center cursor-pointer justify-center text-xs font-medium p-3 text-center"
+                    style={{
+                      backgroundColor:
+                        user.statuses[0].backgroundColor || "#3B82F6",
+                      color: user.statuses[0].textColor || "#FFFFFF",
+                    }}
+                  >
+                    {user.statuses[0].content.length > 25
+                      ? user.statuses[0].content.substring(0, 25) + "..."
+                      : user.statuses[0].content}
+                  </div>
+                ) : user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    className="w-full h-full cursor-pointer object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-600 flex items-center justify-center text-white font-semibold text-xl">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </button>
 
-                <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-10 h-10 rounded-full border-4 border-white overflow-hidden z-10">
-                  {user.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white font-semibold text-sm">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="text-sm font-medium text-center truncate max-w-24">
-                {user.name}
+              <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-10 h-10 rounded-full border-4 border-[var(--background)] overflow-hidden z-10">
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white font-semibold text-sm">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
             </div>
-          ))}
-        </div>
+
+            <div className="text-sm font-medium text-center truncate max-w-24">
+              {user.name}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
-};
+});
+
+StatusComponent.displayName = "StatusComponent";
 
 const RoomList: React.FC<RoomListProps> = ({
   conversations,
@@ -257,6 +259,7 @@ const RoomList: React.FC<RoomListProps> = ({
   const { notifications, markAsRead, markAllAsRead } = useSocket();
   const { statusUsers, isLoadingStatuses, fetchStatuses, uploadStatus } =
     useStatusStore();
+  const { messages } = useChatStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -272,30 +275,61 @@ const RoomList: React.FC<RoomListProps> = ({
     y: 0,
   });
 
-  const getUserIdFromJid = (jid: string) => jid.split("@")[0];
+  const getUserIdFromJid = useCallback((jid: string) => jid.split("@")[0], []);
+  // Function to determine if a user is a contact
+  const isContact = useCallback(
+    (jid: string) => {
+      const userId = getUserIdFromJid(jid);
+      return contacts.some((contact) => contact.contact_id === userId);
+    },
+    [contacts, getUserIdFromJid]
+  );
 
-  const handleMenuToggle = (event: React.MouseEvent) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setMenuPosition({ x: rect.right - 120, y: rect.bottom + 5 });
-    setMenuOpen(!menuOpen);
-  };
+  // Updated getAvatarColor to return random light colors
+  const getAvatarColor = useCallback(() => {
+    const lightColors = [
+      "bg-blue-200",
+      "bg-green-200",
+      "bg-yellow-200",
+      "bg-pink-200",
+      "bg-purple-200",
+      "bg-teal-200",
+      "bg-orange-200",
+    ];
+    return lightColors[Math.floor(Math.random() * lightColors.length)];
+  }, []);
 
-  const handleMenuOptionClick = (option: string) => {
+  const handleMenuToggle = useCallback(
+    (event: React.MouseEvent) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setMenuPosition({ x: rect.right - 120, y: rect.bottom + 5 });
+      setMenuOpen(!menuOpen);
+    },
+    [menuOpen]
+  );
+
+  const handleMenuOptionClick = useCallback((option: string) => {
     if (option === "New Chat") {
       setShowNewChatModal(true);
     }
     setMenuOpen(false);
-  };
+  }, []);
 
-  const handleStartChat = (jid: string) => {
-    onConversationSelect(jid);
-  };
+  const handleStartChat = useCallback(
+    (jid: string) => {
+      onConversationSelect(jid);
+    },
+    [onConversationSelect]
+  );
 
-  const handleBellClick = (event: React.MouseEvent) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setNotificationPosition({ x: rect.right, y: rect.bottom + 5 });
-    setShowNotificationsModal(!showNotificationsModal);
-  };
+  const handleBellClick = useCallback(
+    (event: React.MouseEvent) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setNotificationPosition({ x: rect.right, y: rect.bottom + 5 });
+      setShowNotificationsModal(!showNotificationsModal);
+    },
+    [showNotificationsModal]
+  );
 
   const filteredConversations = useMemo(() => {
     switch (activeTab) {
@@ -312,42 +346,90 @@ const RoomList: React.FC<RoomListProps> = ({
     if (accessToken && user?.id) {
       fetchContacts();
     }
-  }, [accessToken, user?.id, fetchContacts]);
+  }, [accessToken, user?.id]);
 
   useEffect(() => {
     if (accessToken) {
       fetchStatuses();
     }
-  }, [accessToken, fetchStatuses]);
+  }, [accessToken]);
 
-  const handleStatusClick = (user: StatusUser, index: number) => {
+  const handleStatusClick = useCallback((user: StatusUser, index: number) => {
     setSelectedStatusUser(user);
     setSelectedUserIndex(index);
     setShowStatusViewer(true);
-  };
+  }, []);
 
-  const handleAddStatusClick = () => {
+  const handleAddStatusClick = useCallback(() => {
     console.log("Add Status clicked, setting showStatusUpload to true");
     setShowStatusUpload(true);
-  };
+  }, []);
 
-  useEffect(() => {
-    console.log("showStatusUpload state changed:", showStatusUpload);
-  }, [showStatusUpload]);
+  const handleStatusUpload = useCallback(
+    async (statusData: StatusData) => {
+      try {
+        await uploadStatus(statusData);
+        toast.success("Status uploaded successfully");
+      } catch (error) {
+        toast.error("Failed to upload status");
+      }
+    },
+    [uploadStatus]
+  );
 
-  const handleStatusUpload = async (statusData: StatusData) => {
-    try {
-      await uploadStatus(statusData);
-      toast.success("Status uploaded successfully");
-    } catch (error) {
-      toast.error("Failed to upload status");
-    }
-  };
+  const conversationItems = useMemo(() => {
+    return filteredConversations.map((conv) => {
+      const userId = getUserIdFromJid(conv.jid);
+      const contactAvatar = getContactAvatar(userId);
+      const displayAvatar = contactAvatar || conv.avatar;
+      const displayName = getContactName(userId, user?.id) || userId;
 
-  const getAvatarColor = () => "bg-gray-500";
+      // Prioritize last message from state
+      const conversationMessages = messages
+        .filter(
+          (msg) =>
+            (msg.from === conv.jid &&
+              msg.to ===
+                user?.id + "@" + process.env.NEXT_PUBLIC_XMPP_DOMAIN) ||
+            (msg.from ===
+              user?.id + "@" + process.env.NEXT_PUBLIC_XMPP_DOMAIN &&
+              msg.to === conv.jid)
+        )
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      const lastMessageFromState = conversationMessages[0];
+      const lastMessage = lastMessageFromState
+        ? lastMessageFromState.isOwn
+          ? `You: ${lastMessageFromState.text}`
+          : lastMessageFromState.text
+        : conv.lastMessage; // Fallback to conv.lastMessage (from MAM or API)
+
+      const lastMessageTime = lastMessageFromState
+        ? lastMessageFromState.timestamp
+        : conv.lastMessageTime;
+
+      return {
+        ...conv,
+        userId,
+        displayAvatar,
+        displayName,
+        lastMessage,
+        lastMessageTime,
+        isContact: isContact(conv.jid),
+      };
+    });
+  }, [
+    filteredConversations,
+    getUserIdFromJid,
+    getContactAvatar,
+    getContactName,
+    user?.id,
+    messages,
+    isContact,
+  ]);
 
   return (
-    <div className="w-90 bg-[var(--background)] text-[var(--foreground)] shadow-Toaster shadow-lg flex flex-col">
+    <div className="w-90 text-[var(--foreground)] bg-[var(--background)] shadow-Toaster shadow-lg flex flex-col">
       <div className="p-4 pb-3">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Chats</h1>
@@ -470,7 +552,7 @@ const RoomList: React.FC<RoomListProps> = ({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {filteredConversations.length === 0 ? (
+        {conversationItems.length === 0 ? (
           <div className="p-6 text-center">
             <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
               <img
@@ -489,80 +571,82 @@ const RoomList: React.FC<RoomListProps> = ({
           </div>
         ) : (
           <div className="overflow-y-auto h-[calc(100vh-200px)]">
-            {filteredConversations.map((conv) => {
-              const userId = getUserIdFromJid(conv.jid);
-              const contactAvatar = getContactAvatar(userId);
-              const displayAvatar = contactAvatar || conv.avatar;
-              const displayName = getContactName(userId, user?.id);
-
-              return (
-                <div
-                  key={conv.jid}
-                  onClick={() => onConversationSelect(conv.jid)}
-                  className={`px-4 py-4 hover:bg-[var(--bg-card)] hover:rounded-lg cursor-pointer transition-colors ${
-                    activeConversation === conv.jid
-                      ? "bg-[var(--bg-card)] rounded-lg"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="relative flex-shrink-0">
+            {conversationItems.map((conv) => (
+              <div
+                key={conv.jid}
+                onClick={() => onConversationSelect(conv.jid)}
+                className={`px-4 py-4 hover:rounded-lg cursor-pointer transition-colors ${
+                  activeConversation === conv.jid
+                    ? "bg-gray-100 rounded-lg"
+                    : ""
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="relative flex-shrink-0">
+                    {/* MODIFIED AVATAR RENDERING */}
+                    {conv.isContact &&
+                    conv.displayAvatar &&
+                    conv.displayAvatar.trim() &&
+                    conv.displayAvatar !== "/chats.svg" ? (
+                      // Show avatar for contacts with valid avatar
+                      <img
+                        src={conv.displayAvatar}
+                        alt={conv.displayName}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      // Show initial with background color for:
+                      // 1. Non-contacts
+                      // 2. Contacts without avatars
+                      // 3. Invalid avatars
                       <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${getAvatarColor()}`}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center ${getAvatarColor()}`}
                       >
-                        {displayAvatar ? (
-                          <img
-                            src={displayAvatar}
-                            alt={displayName}
-                            className="w-full h-full rounded-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-lg">
-                            {displayName.charAt(0).toUpperCase()}
-                          </span>
-                        )}
+                        <span className="text-white font-semibold text-lg">
+                          {conv.displayName.charAt(0).toUpperCase()}
+                        </span>
                       </div>
-                      {conv.isOnline && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-base font-semibold truncate mb-1">
-                            {displayName}
-                          </p>
-                          <div className="flex items-center">
-                            {conv.lastMessage.includes("You:") && (
-                              <span className="text-sm mr-1">You:</span>
-                            )}
-                            {conv.lastMessage.includes("received") && (
-                              <div className="w-4 h-4 rounded-full bg-[#2A8FEA] flex items-center justify-center mr-2">
-                                <span className="text-white text-xs">Ksh </span>
-                              </div>
-                            )}
-                            <p className="text-sm truncate">
-                              {conv.lastMessage.replace("You:", "").trim()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end ml-2">
-                          <p className="text-xs mb-1">
-                            {conv.lastMessageTime instanceof Date &&
-                            !isNaN(conv.lastMessageTime.getTime())
-                              ? conv.lastMessageTime.toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "Unknown time"}
+                    )}
+                    {conv.isOnline && (
+                      <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base font-semibold truncate mb-1">
+                          {conv.displayName}
+                        </p>
+                        <div className="flex items-center">
+                          {conv.lastMessage.includes("You:") && (
+                            <span className="text-sm mr-1">You:</span>
+                          )}
+                          {conv.lastMessage.includes("received") && (
+                            <div className="w-4 h-4 rounded-full bg-[#2A8FEA] flex items-center justify-center mr-2">
+                              <span className="text-white text-xs">Ksh </span>
+                            </div>
+                          )}
+                          <p className="text-sm truncate">
+                            {conv.lastMessage.replace("You:", "").trim()}
                           </p>
                         </div>
+                      </div>
+                      <div className="flex flex-col items-end ml-2">
+                        <p className="text-xs mb-1">
+                          {conv.lastMessageTime instanceof Date &&
+                          !isNaN(conv.lastMessageTime.getTime())
+                            ? conv.lastMessageTime.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "Unknown time"}
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>

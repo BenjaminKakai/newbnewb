@@ -113,6 +113,8 @@ const Call: React.FC = () => {
     ]);
   };
 
+
+
   // Initialize socket connection
   useEffect(() => {
     if (isAuthenticated && user?.id && accessToken) {
@@ -235,6 +237,7 @@ const Call: React.FC = () => {
       localVideoRef.current.srcObject = localStream;
       localVideoRef.current.muted = true;
     }
+    
   }, [localStream]);
 
   const formatCallTime = (timestamp: Date) => {
@@ -542,6 +545,8 @@ const Call: React.FC = () => {
       </div>
     );
   }
+
+  console.log(accessToken, "Access Token in Call Component");
 
   return (
     <div className="h-screen bg-white flex">

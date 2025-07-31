@@ -29,13 +29,17 @@ interface Conversation {
   starred?: boolean;
 }
 
-interface Message {
+export interface Message {
   id: string;
   from: string;
   to: string;
   text: string;
   timestamp: Date;
   isOwn: boolean;
+  type?: "text" | "payment" | "image" | "video"; // Add message type
+  paymentAmount?: string; // For payment messages
+  imageId?: string; // For image messages
+  videoId?: string; // For video messages
 }
 
 interface User {
@@ -52,6 +56,7 @@ interface ChatStore {
   connectionError: string | null;
   currentConversationDetails: Conversation | null;
   activeConversation: string;
+  addMessage: (message: Message) => void;
   setConversations: (conversations: Conversation[]) => void;
   updateConversation: (jid: string, updates: Partial<Conversation>) => void;
   addConversation: (conversation: Conversation) => void;
@@ -68,7 +73,11 @@ interface ChatStore {
   sendMessage: (
     recipientJid: string,
     messageText: string,
-    currentUser: User | null
+    currentUser: User | null,
+    messageType?: "text" | "payment" | "image" | "video",
+    paymentAmount?: string,
+    imageId?: string,
+    videoId?: string
   ) => void;
   fetchConversationDetails: (
     jid: string,
@@ -85,6 +94,8 @@ export const useChatStore = create<ChatStore>()(
     (set, get) => {
       let connectionAttempts = 0;
       const maxConnectionAttempts = 3;
+      const maxMamPages = 10;
+      const queriedConversations = new Set<string>();
 
       const isValidBareJid = (jid: string): boolean => {
         const jidRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$/;
@@ -232,14 +243,7 @@ export const useChatStore = create<ChatStore>()(
               const updatedMessages = [...state.messages, ...apiMessages]
                 .filter(
                   (msg, index, self) =>
-                    index ===
-                    self.findIndex(
-                      (m) =>
-                        m.text === msg.text &&
-                        Math.abs(
-                          m.timestamp.getTime() - msg.timestamp.getTime()
-                        ) < 1000
-                    )
+                    index === self.findIndex((m) => m.id === msg.id)
                 )
                 .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
               return { messages: updatedMessages };
@@ -254,9 +258,10 @@ export const useChatStore = create<ChatStore>()(
       const fetchRecentMessagesMAM = (
         mamNS = "urn:xmpp:mam:2",
         currentUser: User | null,
-        getContactName: (userId: string, currentUserId?: string) => string
+        getContactName: (userId: string, currentUserId?: string) => string,
+        page = 1
       ) => {
-        if (!xmppClient.isConnected()) return;
+        if (!xmppClient.isConnected() || page > maxMamPages) return;
 
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - 7);
@@ -283,14 +288,15 @@ export const useChatStore = create<ChatStore>()(
           (response: any) => {
             const rsm = response.getElementsByTagName("set")[0];
             const complete = response.getAttribute("complete") === "true";
-            if (rsm && !complete) {
+            if (rsm && !complete && page < maxMamPages) {
               const last = rsm.getElementsByTagName("last")[0];
               if (last) {
                 fetchRecentMessagesMAMNext(
                   last.textContent,
                   mamNS,
                   currentUser,
-                  getContactName
+                  getContactName,
+                  page + 1
                 );
               }
             }
@@ -304,7 +310,8 @@ export const useChatStore = create<ChatStore>()(
               fetchRecentMessagesMAM(
                 "urn:xmpp:mam:1",
                 currentUser,
-                getContactName
+                getContactName,
+                page
               );
             } else {
               set({
@@ -321,9 +328,10 @@ export const useChatStore = create<ChatStore>()(
         lastId: string,
         mamNS: string,
         currentUser: User | null,
-        getContactName: (userId: string, currentUserId?: string) => string
+        getContactName: (userId: string, currentUserId?: string) => string,
+        page: number
       ) => {
-        if (!xmppClient.isConnected()) return;
+        if (!xmppClient.isConnected() || page > maxMamPages) return;
 
         const iq = $iq({ type: "set", id: uuidv4() })
           .c("query", { xmlns: mamNS })
@@ -345,65 +353,21 @@ export const useChatStore = create<ChatStore>()(
           (response: any) => {
             const rsm = response.getElementsByTagName("set")[0];
             const complete = response.getAttribute("complete") === "true";
-            if (rsm && !complete) {
+            if (rsm && !complete && page < maxMamPages) {
               const last = rsm.getElementsByTagName("last")[0];
               if (last) {
                 fetchRecentMessagesMAMNext(
                   last.textContent,
                   mamNS,
                   currentUser,
-                  getContactName
+                  getContactName,
+                  page + 1
                 );
               }
             }
           },
           (error: any) => {
             console.error("MAM next page query failed:", error);
-          }
-        );
-      };
-
-      const fetchRosterContacts = (
-        currentUser: User | null,
-        getContactName: (userId: string, currentUserId?: string) => string
-      ) => {
-        if (!xmppClient.isConnected()) return;
-
-        const iq = $iq({ type: "get", id: uuidv4() }).c("query", {
-          xmlns: "jabber:iq:roster",
-        });
-
-        xmppClient.sendIQ(
-          iq,
-          (response: any) => {
-            const items = response.getElementsByTagName("item");
-            for (let i = 0; i < items.length; i++) {
-              const jid = items[i].getAttribute("jid");
-              const userId = jid.split("@")[0];
-              if (!get().conversations.some((conv) => conv.jid === jid)) {
-                get().addConversation({
-                  jid,
-                  name: getContactName(userId, currentUser?.id),
-                  lastMessage: `Contact: ${getContactName(
-                    userId,
-                    currentUser?.id
-                  )}`,
-                  lastMessageTime: new Date(),
-                  unreadCount: 0,
-                  type: "CHAT",
-                  members: [
-                    {
-                      id: userId,
-                      name: getContactName(userId, currentUser?.id),
-                      avatar: getDummyAvatar(jid),
-                    },
-                  ],
-                });
-              }
-            }
-          },
-          (error: any) => {
-            console.error("Roster fetch failed:", error);
           }
         );
       };
@@ -418,6 +382,8 @@ export const useChatStore = create<ChatStore>()(
           set({ connectionError: `Invalid JID format: ${withJid}` });
           return;
         }
+        if (queriedConversations.has(withJid)) return;
+        queriedConversations.add(withJid);
 
         await Promise.allSettled([
           new Promise((resolve) => {
@@ -425,7 +391,8 @@ export const useChatStore = create<ChatStore>()(
               withJid,
               "urn:xmpp:mam:2",
               currentUser,
-              getContactName
+              getContactName,
+              1
             );
             resolve(null);
           }),
@@ -437,9 +404,10 @@ export const useChatStore = create<ChatStore>()(
         withJid: string,
         mamNS = "urn:xmpp:mam:2",
         currentUser: User | null,
-        getContactName: (userId: string, currentUserId?: string) => string
+        getContactName: (userId: string, currentUserId?: string) => string,
+        page = 1
       ) => {
-        if (!xmppClient.isConnected()) return;
+        if (!xmppClient.isConnected() || page > maxMamPages) return;
 
         const iq = $iq({ type: "set", id: uuidv4() })
           .c("query", { xmlns: mamNS })
@@ -463,7 +431,7 @@ export const useChatStore = create<ChatStore>()(
           (response: any) => {
             const rsm = response.getElementsByTagName("set")[0];
             const complete = response.getAttribute("complete") === "true";
-            if (rsm && !complete) {
+            if (rsm && !complete && page < maxMamPages) {
               const last = rsm.getElementsByTagName("last")[0];
               if (last) {
                 fetchMessageHistoryMAMNext(
@@ -471,7 +439,8 @@ export const useChatStore = create<ChatStore>()(
                   last.textContent,
                   mamNS,
                   currentUser,
-                  getContactName
+                  getContactName,
+                  page + 1
                 );
               }
             }
@@ -485,7 +454,8 @@ export const useChatStore = create<ChatStore>()(
                 withJid,
                 "urn:xmpp:mam:1",
                 currentUser,
-                getContactName
+                getContactName,
+                page
               );
             } else {
               set({
@@ -503,9 +473,10 @@ export const useChatStore = create<ChatStore>()(
         lastId: string,
         mamNS: string,
         currentUser: User | null,
-        getContactName: (userId: string, currentUserId?: string) => string
+        getContactName: (userId: string, currentUserId?: string) => string,
+        page: number
       ) => {
-        if (!xmppClient.isConnected()) return;
+        if (!xmppClient.isConnected() || page > maxMamPages) return;
 
         const iq = $iq({ type: "set", id: uuidv4() })
           .c("query", { xmlns: mamNS })
@@ -532,7 +503,7 @@ export const useChatStore = create<ChatStore>()(
           (response: any) => {
             const rsm = response.getElementsByTagName("set")[0];
             const complete = response.getAttribute("complete") === "true";
-            if (rsm && !complete) {
+            if (rsm && !complete && page < maxMamPages) {
               const last = rsm.getElementsByTagName("last")[0];
               if (last) {
                 fetchMessageHistoryMAMNext(
@@ -540,7 +511,8 @@ export const useChatStore = create<ChatStore>()(
                   last.textContent,
                   mamNS,
                   currentUser,
-                  getContactName
+                  getContactName,
+                  page + 1
                 );
               }
             }
@@ -565,29 +537,21 @@ export const useChatStore = create<ChatStore>()(
             headers: { Authorization: `Bearer ${get().accessToken}` },
           });
 
-          const apiMessages: Message[] = response.data?.messages?.map(
-            (msg: any) => ({
+          const apiMessages: Message[] =
+            response.data?.messages?.map((msg: any) => ({
               id: msg.id || uuidv4(),
               from: msg.from,
               to: msg.to,
               text: msg.body || msg.text,
               timestamp: ensureDate(msg.timestamp),
               isOwn: msg.from === currentUser.jid,
-            })
-          ) || [];
+            })) || [];
 
           set((state) => ({
             messages: [...state.messages, ...apiMessages]
               .filter(
                 (msg, index, self) =>
-                  index ===
-                  self.findIndex(
-                    (m) =>
-                      m.text === msg.text &&
-                      Math.abs(
-                        m.timestamp.getTime() - msg.timestamp.getTime()
-                      ) < 1000
-                  )
+                  index === self.findIndex((m) => m.id === msg.id)
               )
               .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
           }));
@@ -614,6 +578,18 @@ export const useChatStore = create<ChatStore>()(
               starred: conv.starred ?? false,
             })),
           }),
+
+        // In your chat store implementation
+        addMessage: (message: Message) => {
+          set((state) => ({
+            messages: [...state.messages, message]
+              .filter(
+                (msg, index, self) =>
+                  index === self.findIndex((m) => m.id === msg.id)
+              )
+              .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
+          }));
+        },
         updateConversation: (jid, updates) =>
           set((state) => ({
             conversations: state.conversations.map((conv) =>
@@ -709,16 +685,41 @@ export const useChatStore = create<ChatStore>()(
                 connected: true,
               });
               xmppClient.setConnected(true);
+
               xmppClient.send($pres().tree());
 
               xmppClient.addMessageHandler((msg: any) => {
                 const from = msg.getAttribute("from");
                 const type = msg.getAttribute("type");
                 const body = msg.getElementsByTagName("body")[0];
+                const paymentId = msg.getElementsByTagName("paymentid")[0];
+                const imageId = msg.getElementsByTagName("imageid")[0];
+                const videoId = msg.getElementsByTagName("videoid")[0];
+
+                const paymentAmount = msg.getElementsByTagName("paymentAmount")[0];
+
+
 
                 if (type === "chat" && body) {
                   const text = Strophe.getText(body);
                   const fromJid = from.split("/")[0];
+                  let messageType: "text" | "payment" | "image" | "video" =
+                    "text";
+                  let paymentAmount: string | undefined;
+                  let imageIdValue: string | undefined;
+                  let videoIdValue: string | undefined;
+
+                  if (paymentId) {
+                    messageType = "payment";
+                    paymentAmount = Strophe.getText(paymentId);
+                  } else if (imageId) {
+                    messageType = "image";
+                    imageIdValue = Strophe.getText(imageId);
+                  } else if (videoId) {
+                    messageType = "video";
+                    videoIdValue = Strophe.getText(videoId);
+                  }
+
                   const newMessage: Message = {
                     id: msg.getAttribute("id") || uuidv4(),
                     from: fromJid,
@@ -726,10 +727,21 @@ export const useChatStore = create<ChatStore>()(
                     text,
                     timestamp: new Date(),
                     isOwn: fromJid === user?.jid,
+                    type: messageType,
+                    paymentAmount: paymentAmount,
+                    imageId: imageIdValue,
+                    videoId: videoIdValue,
                   };
 
                   set((state) => ({
-                    messages: [...state.messages, newMessage],
+                    messages: [...state.messages, newMessage]
+                      .filter(
+                        (msg, index, self) =>
+                          index === self.findIndex((m) => m.id === msg.id)
+                      )
+                      .sort(
+                        (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+                      ),
                   }));
                   updateConversationsList(
                     fromJid,
@@ -779,15 +791,7 @@ export const useChatStore = create<ChatStore>()(
                         messages: [...state.messages, historicalMessage]
                           .filter(
                             (msg, index, self) =>
-                              index ===
-                              self.findIndex(
-                                (m) =>
-                                  m.text === msg.text &&
-                                  Math.abs(
-                                    m.timestamp.getTime() -
-                                      msg.timestamp.getTime()
-                                  ) < 1000
-                              )
+                              index === self.findIndex((m) => m.id === msg.id)
                           )
                           .sort(
                             (a, b) =>
@@ -812,8 +816,13 @@ export const useChatStore = create<ChatStore>()(
 
               Promise.allSettled([
                 fetchConversationsFromAPI(user, accessToken, getContactName),
-                fetchRecentMessagesMAM("urn:xmpp:mam:2", user, getContactName),
-                fetchRosterContacts(user, getContactName),
+                fetchRecentMessagesMAM(
+                  "urn:xmpp:mam:2",
+                  user,
+                  getContactName,
+                  1
+                ),
+                // fetchRosterContacts(user, getContactName),
               ]).catch((error) => {
                 console.error("Error fetching conversations:", error);
                 set({ connectionError: "Failed to fetch conversations" });
@@ -829,11 +838,16 @@ export const useChatStore = create<ChatStore>()(
             connectionStatus: "Disconnected",
             connectionError: null,
           });
+          queriedConversations.clear();
         },
         sendMessage: (
           recipientJid: string,
           messageText: string,
-          currentUser: User | null
+          currentUser: User | null,
+          messageType: "text" | "payment" | "image" | "video" = "text",
+          paymentAmount?: string,
+          imageId?: string,
+          videoId?: string
         ) => {
           if (
             !xmppClient.isConnected() ||
@@ -842,19 +856,56 @@ export const useChatStore = create<ChatStore>()(
             !currentUser
           )
             return;
-
-          xmppClient.sendMessage(recipientJid, messageText);
+        
+          const messageId = uuidv4();
+          let stanza;
+        
+          // Use Strophe's $msg to build the stanza
+          switch (messageType) {
+            case "payment":
+              stanza = $msg({ to: recipientJid, from: currentUser.jid, type: "chat", id: messageId })
+                .c("body").t(messageText).up()
+                .c("paymentid").t(paymentAmount || "");
+              break;
+            case "image":
+              stanza = $msg({ to: recipientJid, from: currentUser.jid, type: "chat", id: messageId })
+                .c("body").t(messageText).up()
+                .c("imageid").t(imageId || "");
+              break;
+            case "video":
+              stanza = $msg({ to: recipientJid, from: currentUser.jid, type: "chat", id: messageId })
+                .c("body").t(messageText).up()
+                .c("videoid").t(videoId || "");
+              break;
+            default:
+              stanza = $msg({ to: recipientJid, from: currentUser.jid, type: "chat", id: messageId })
+                .c("body").t(messageText);
+              break;
+          }
+        
+          // Send the stanza as a DOM element
+          xmppClient.send(stanza.tree());
+        
           const newMessage: Message = {
-            id: uuidv4(),
+            id: messageId,
             from: currentUser.jid,
             to: recipientJid,
             text: messageText,
             timestamp: new Date(),
             isOwn: true,
+            type: messageType,
+            paymentAmount: messageType === "payment" ? paymentAmount : undefined,
+            imageId: messageType === "image" ? imageId : undefined,
+            videoId: messageType === "video" ? videoId : undefined,
           };
-
+        
           set((state) => ({
-            messages: [...state.messages, newMessage],
+            messages: [...state.messages, newMessage]
+              .filter(
+                (msg, index, self) =>
+                  index === self.findIndex((m) => m.id === msg.id)
+              )
+              .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
           }));
           updateConversationsList(
             recipientJid,

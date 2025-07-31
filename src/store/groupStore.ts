@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 import { Strophe, $iq, $pres } from "strophe.js";
+import { useXMPPStore } from "./xmppStore";
 import { xmppClient } from "@/services/xmppClient";
 
 const API_HOST = process.env.NEXT_PUBLIC_XMPP_API_HOST;
@@ -107,8 +108,7 @@ let hasInitialized = false;
 export const useGroupStore = create<GroupStore>()(
   persist(
     (set, get) => {
-      let connectionAttempts = 0;
-      const maxConnectionAttempts = 3;
+      const xmpp = useXMPPStore.getState();
 
       const isValidBareJid = (jid: string): boolean => {
         const jidRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$/;
@@ -117,7 +117,7 @@ export const useGroupStore = create<GroupStore>()(
 
       const ensureDate = (value: any): Date => {
         if (value instanceof Date) return value;
-        if (typeof value === 'string' || typeof value === 'number') {
+        if (typeof value === "string" || typeof value === "number") {
           const date = new Date(value);
           return isNaN(date.getTime()) ? new Date() : date;
         }
@@ -157,35 +157,35 @@ export const useGroupStore = create<GroupStore>()(
 
         if (existingConv) {
           set((state) => ({
-            groupConversations: state.groupConversations.map((conv) =>
-              conv.jid === jid
-                ? {
-                    ...conv,
-                    lastMessage: nickname
-                      ? `${nickname}: ${lastMessage}`
-                      : lastMessage,
-                    lastMessageTime: ensureDate(timestamp),
-                    unreadCount: isRead
-                      ? 0
-                      : incrementUnread
-                      ? (conv.unreadCount || 0) + 1
-                      : conv.unreadCount || 0,
-                    name: conv.name || getContactName(userId, currentUserId),
-                    type: "GROUP" as const,
-                  }
-                : conv
-            ).sort(
-              (a, b) =>
-                b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
-            ),
+            groupConversations: state.groupConversations
+              .map((conv) =>
+                conv.jid === jid
+                  ? {
+                      ...conv,
+                      lastMessage: nickname
+                        ? `${nickname}: ${lastMessage}`
+                        : lastMessage,
+                      lastMessageTime: ensureDate(timestamp),
+                      unreadCount: isRead
+                        ? 0
+                        : incrementUnread
+                        ? (conv.unreadCount || 0) + 1
+                        : conv.unreadCount || 0,
+                      name: conv.name || getContactName(userId, currentUserId),
+                      type: "GROUP" as const,
+                    }
+                  : conv
+              )
+              .sort(
+                (a, b) =>
+                  b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
+              ),
           }));
         } else {
           const newConversation: GroupConversation = {
             jid,
             name: getContactName(userId, currentUserId),
-            lastMessage: nickname
-              ? `${nickname}: ${lastMessage}`
-              : lastMessage,
+            lastMessage: nickname ? `${nickname}: ${lastMessage}` : lastMessage,
             lastMessageTime: ensureDate(timestamp),
             unreadCount: isRead ? 0 : incrementUnread ? 1 : 0,
             type: "GROUP" as const,
@@ -247,7 +247,7 @@ export const useGroupStore = create<GroupStore>()(
               })
               .map((group: any) => {
                 const groupJid = `${group.name}@${CONFERENCE_DOMAIN}`;
-                
+
                 if (!isValidBareJid(groupJid)) {
                   console.error(`Invalid group JID: ${groupJid}`);
                   return null;
@@ -256,8 +256,9 @@ export const useGroupStore = create<GroupStore>()(
                 const createdAt = group.created_at
                   ? ensureDate(group.created_at)
                   : new Date();
-                
-                const lastMessage = group.last_chat_message?.txt || "Group created";
+
+                const lastMessage =
+                  group.last_chat_message?.txt || "Group created";
                 const lastMessageTime = group.last_chat_message?.created_at
                   ? ensureDate(group.last_chat_message.created_at)
                   : createdAt;
@@ -327,9 +328,9 @@ export const useGroupStore = create<GroupStore>()(
                     b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
                 );
 
-                return { 
+                return {
                   groupConversations: updatedConversations,
-                  isLoading: false 
+                  isLoading: false,
                 };
               });
 
@@ -337,7 +338,7 @@ export const useGroupStore = create<GroupStore>()(
               setTimeout(() => {
                 newGroups.forEach((group) => {
                   if (currentUser && xmppClient.isConnected()) {
-                    xmppClient.joinGroup(group.jid, currentUser.id);
+                    xmpp.joinGroup(group.jid, currentUser.id);
                     fetchMAMMessages(group.jid, currentUser);
                   }
                 });
@@ -352,24 +353,25 @@ export const useGroupStore = create<GroupStore>()(
           }
         } catch (error) {
           console.error("Failed to fetch groups from API:", error);
-          
+
           if (axios.isAxiosError(error)) {
             console.error("API Error Status:", error.response?.status);
             console.error("API Error Data:", error.response?.data);
             console.error("API Error Headers:", error.response?.headers);
-            
-            const errorMessage = error.response?.data?.message || 
-                               error.response?.statusText || 
-                               "Failed to fetch groups";
-            
-            set({ 
+
+            const errorMessage =
+              error.response?.data?.message ||
+              error.response?.statusText ||
+              "Failed to fetch groups";
+
+            set({
               connectionError: errorMessage,
-              isLoading: false 
+              isLoading: false,
             });
           } else {
-            set({ 
+            set({
               connectionError: "Network error while fetching groups",
-              isLoading: false 
+              isLoading: false,
             });
           }
         }
@@ -396,11 +398,11 @@ export const useGroupStore = create<GroupStore>()(
               .map((msg: any) => {
                 if (!msg.id || !msg.username || !msg.txt || !msg.created_at)
                   return null;
-                
+
                 const fromNickname =
                   msg.user?.username || msg.username.split("/")[1] || "Unknown";
                 const timestamp = ensureDate(msg.created_at);
-                
+
                 return {
                   id: msg.id,
                   from: msg.username,
@@ -595,234 +597,35 @@ export const useGroupStore = create<GroupStore>()(
           }
 
           console.log("Initializing group store connection for user:", user.id);
-          set({ 
-            currentUser: user, 
+          set({
+            currentUser: user,
             accessToken,
-            connectionError: null 
+            connectionError: null,
           });
 
           // Fetch groups immediately if not connected to XMPP yet
           fetchGroupConversationsFromAPI(user, accessToken, getContactName);
 
-          xmppClient.connect(user.jid, user.id, (status) => {
-            if (status === Strophe.Status.CONNECTING) {
-              set({ connectionStatus: "Connecting...", connectionError: null });
-            } else if (status === Strophe.Status.CONNFAIL) {
-              set({
-                connectionStatus: "Connection failed",
-                connectionError: "Failed to connect. Retrying...",
-                connected: false,
-              });
-              if (connectionAttempts < maxConnectionAttempts) {
-                setTimeout(() => {
-                  connectionAttempts++;
-                  xmppClient.connect(user.jid, user.id, arguments.callee);
-                }, 3000);
-              } else {
-                set({
-                  connectionError: "Failed to connect after multiple attempts.",
-                  connectionStatus: "Disconnected",
-                });
-              }
-            } else if (status === Strophe.Status.DISCONNECTING) {
-              set({ connectionStatus: "Disconnecting..." });
-            } else if (status === Strophe.Status.DISCONNECTED) {
-              set({ connectionStatus: "Disconnected", connected: false });
-            } else if (status === Strophe.Status.CONNECTED) {
-              set({
-                connectionStatus: "Connected",
-                connectionError: null,
-                connected: true,
-              });
-              
-              xmppClient.setConnected(true);
-              xmppClient.send($pres().tree());
-
-              // Add group message handler
-              xmppClient.addGroupMessageHandler((msg: any) => {
-                const from = msg.getAttribute("from");
-                const type = msg.getAttribute("type");
-                const body = msg.getElementsByTagName("body")[0];
-
-                if (type === "groupchat" && body) {
-                  const text = Strophe.getText(body);
-                  const groupJid = from.split("/")[0];
-                  const nickname = from.split("/")[1] || "Unknown";
-                  const isOwn = nickname === user?.id;
-
-                  if (!isValidBareJid(groupJid)) {
-                    console.error(`Invalid group JID: ${groupJid}`);
-                    return true;
-                  }
-
-                  const newMessage: Message = {
-                    id: msg.getAttribute("id") || uuidv4(),
-                    from,
-                    to: groupJid,
-                    text,
-                    timestamp: new Date(),
-                    isOwn,
-                    nickname,
-                  };
-
-                  set((state) => ({
-                    groupMessages: [...state.groupMessages, newMessage]
-                      .filter(
-                        (msg, index, self) =>
-                          index ===
-                          self.findIndex(
-                            (m) =>
-                              m.text === msg.text &&
-                              Math.abs(
-                                m.timestamp.getTime() - msg.timestamp.getTime()
-                              ) < 1000
-                          )
-                      )
-                      .sort(
-                        (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-                      ),
-                  }));
-                  
-                  updateGroupConversationsList(
-                    groupJid,
-                    text,
-                    new Date(),
-                    !isOwn &&
-                      groupJid !== get().activeGroupConversation &&
-                      !get().readGroupConversations.includes(groupJid),
-                    getContactName,
-                    user?.id,
-                    nickname
-                  );
-                }
-                return true;
-              });
-
-              // Add MAM handler for historical messages
-              xmppClient.addMAMHandler((msg: any) => {
-                const result = msg.getElementsByTagName("result")[0];
-                if (result) {
-                  const forwarded = result.getElementsByTagName("forwarded")[0];
-                  if (forwarded) {
-                    const message =
-                      forwarded.getElementsByTagName("message")[0];
-                    const body = message?.getElementsByTagName("body")[0];
-                    if (body) {
-                      const from = message.getAttribute("from");
-                      const to = message.getAttribute("to");
-                      const text = Strophe.getText(body);
-                      const delay = forwarded.getElementsByTagName("delay")[0];
-                      const timestamp = ensureDate(
-                        delay ? delay.getAttribute("stamp") : new Date()
-                      );
-                      const isGroup = from.includes("@conference.");
-                      if (!isGroup) return true;
-                      
-                      const groupJid = from.split("/")[0];
-                      const nickname = from.split("/")[1] || "Unknown";
-
-                      const historicalMessage: Message = {
-                        id: message.getAttribute("id") || uuidv4(),
-                        from,
-                        to: groupJid,
-                        text,
-                        timestamp,
-                        isOwn: nickname === user?.id,
-                        nickname,
-                      };
-
-                      set((state) => ({
-                        groupMessages: [
-                          ...state.groupMessages,
-                          historicalMessage,
-                        ]
-                          .filter(
-                            (msg, index, self) =>
-                              index ===
-                              self.findIndex(
-                                (m) =>
-                                  m.text === msg.text &&
-                                  Math.abs(
-                                    m.timestamp.getTime() -
-                                      msg.timestamp.getTime()
-                                  ) < 1000
-                              )
-                          )
-                          .sort(
-                            (a, b) =>
-                              a.timestamp.getTime() - b.timestamp.getTime()
-                          ),
-                      }));
-
-                      updateGroupConversationsList(
-                        groupJid,
-                        text,
-                        timestamp,
-                        groupJid !== get().activeGroupConversation &&
-                          !get().readGroupConversations.includes(groupJid),
-                        getContactName,
-                        user?.id,
-                        nickname
-                      );
-                    }
-                  }
-                }
-                return true;
-              });
-
-              // Add presence handler
-              xmppClient.addPresenceHandler((presence: any) => {
-                const from = presence.getAttribute("from");
-                const type = presence.getAttribute("type") || "available";
-                if (from.includes(`@${CONFERENCE_DOMAIN}`)) {
-                  const groupJid = from.split("/")[0];
-                  if (!isValidBareJid(groupJid)) {
-                    console.error(`Invalid group JID in presence: ${groupJid}`);
-                    return true;
-                  }
-                  console.log(`Presence update in ${groupJid}: ${type}`);
-                }
-                return true;
-              });
-
-              // Fetch groups again after connection is established
-              fetchGroupConversationsFromAPI(
-                user,
-                accessToken,
-                getContactName
-              ).catch((error) => {
-                console.error("Error fetching group conversations:", error);
-                set({ connectionError: "Failed to fetch group conversations" });
-              });
-            }
-          });
+          // Reuse existing connection if available
+          if (!xmpp.isConnected) {
+            xmpp.connect(user.jid, user.id);
+          }
         },
 
         cleanupConnection: () => {
+          // Only clean up group-specific handlers
           const state = get();
           state.groupConversations.forEach((group) => {
             if (group.jid && state.currentUser) {
-              xmppClient.leaveGroup(group.jid, state.currentUser.id);
+              xmpp.leaveGroup(group.jid, state.currentUser.id);
             }
           });
-          xmppClient.removeHandlers();
-          xmppClient.disconnect();
         },
 
         disconnect: () => {
           const state = get();
-          state.groupConversations.forEach((group) => {
-            if (group.jid && state.currentUser) {
-              xmppClient.leaveGroup(group.jid, state.currentUser.id);
-            }
-          });
-          xmppClient.removeHandlers();
-          xmppClient.disconnect();
-          set({
-            connected: false,
-            connectionStatus: "Disconnected",
-            connectionError: null,
-          });
+
+          xmpp.removeHandlers();
         },
 
         sendGroupMessage: (
@@ -830,17 +633,9 @@ export const useGroupStore = create<GroupStore>()(
           messageText: string,
           currentUser: User | null
         ) => {
-          if (
-            !xmppClient.isConnected() ||
-            !messageText.trim() ||
-            !groupJid.trim() ||
-            !currentUser
-          )
-            return;
-
           const messageId = `msg_${Date.now()}`;
-          xmppClient.sendGroupMessage(groupJid, messageText, messageId);
-          
+          xmpp.sendGroupMessage(groupJid, messageText, messageId);
+
           const newMessage: Message = {
             id: messageId,
             from: `${groupJid}/${currentUser.id}`,
@@ -866,7 +661,7 @@ export const useGroupStore = create<GroupStore>()(
               )
               .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
           }));
-          
+
           updateGroupConversationsList(
             groupJid,
             messageText,
@@ -882,14 +677,14 @@ export const useGroupStore = create<GroupStore>()(
             set({ connectionError: `Invalid group JID: ${groupJid}` });
             return;
           }
-          xmppClient.joinGroup(groupJid, currentUser.id);
+          xmpp.joinGroup(groupJid, currentUser.id);
         },
         leaveGroup: (groupJid: string, currentUser: User | null) => {
           if (!currentUser || !isValidBareJid(groupJid)) {
             set({ connectionError: `Invalid group JID: ${groupJid}` });
             return;
           }
-          xmppClient.leaveGroup(groupJid, currentUser.id);
+          xmpp.leaveGroup(groupJid, currentUser.id);
           set((state) => ({
             groupConversations: state.groupConversations.filter(
               (conv) => conv.jid !== groupJid
@@ -965,7 +760,7 @@ export const useGroupStore = create<GroupStore>()(
                     b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
                 ),
               }));
-              xmppClient.joinGroup(groupJid, currentUser.id);
+              xmpp.joinGroup(groupJid, currentUser.id);
               get().startGroupConversation(groupJid, getContactName);
             }
           } catch (error) {

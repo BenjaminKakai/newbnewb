@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, DollarSign, Send, Loader } from "lucide-react";
 import { useWalletStore } from "@/store/walletStore";
-
+import { Message } from "@/store/chatStore";
 interface WalletModalProps {
   currentUserId?: string;
   activeConversation?: string;
@@ -48,7 +48,6 @@ const WalletModal: React.FC<WalletModalProps> = ({
   const [showPinInput, setShowPinInput] = useState(false);
   const pinInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Refresh wallet data and reset state when modal opens
   useEffect(() => {
     if (showWalletModal) {
       refreshWallet();
@@ -59,14 +58,12 @@ const WalletModal: React.FC<WalletModalProps> = ({
     }
   }, [showWalletModal, refreshWallet]);
 
-  // Focus first PIN input when shown
   useEffect(() => {
     if (showPinInput && pinInputRefs.current[0]) {
       pinInputRefs.current[0].focus();
     }
   }, [showPinInput]);
 
-  // Listen for wallet store errors
   useEffect(() => {
     if (walletError) {
       setError(walletError);
@@ -76,32 +73,14 @@ const WalletModal: React.FC<WalletModalProps> = ({
 
   if (!showWalletModal) return null;
 
-  // Get current balance from summary
-  const getCurrentBalance = () => {
-    return summary?.balance || 0;
-  };
-
-  // Get currency symbol or code
-  const getCurrency = () => {
-    if (summary?.currencyDetails?.symbol) {
-      return summary.currencyDetails.symbol;
-    }
-    if (summary?.currencyDetails?.name) {
-      return summary.currencyDetails.name;
-    }
-    if (summary?.currency) {
-      return summary.currency;
-    }
-    return "Ksh";
-  };
-
-  // Format currency for display
-  const formatCurrency = (value: number | undefined | null) => {
-    const safeValue = value ?? 0;
-    return `${getCurrency()} ${safeValue.toLocaleString()}`;
-  };
-
-  // Get display name from JID
+  const getCurrentBalance = () => summary?.balance || 0;
+  const getCurrency = () =>
+    summary?.currencyDetails?.symbol ||
+    summary?.currencyDetails?.name ||
+    summary?.currency ||
+    "Ksh";
+  const formatCurrency = (value: number | undefined | null) =>
+    `${getCurrency()} ${(value ?? 0).toLocaleString()}`;
   const getConversationDisplayName = () => {
     const jid = activeConversation || activeGroupJid || "";
     if (!jid) return "Unknown";
@@ -109,45 +88,32 @@ const WalletModal: React.FC<WalletModalProps> = ({
     return username.charAt(0).toUpperCase() + username.slice(1);
   };
 
-  // Validate amount
   const validateAmount = () => {
     const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
+    if (isNaN(numAmount) || numAmount <= 0)
       return "Please enter a valid amount";
-    }
-    if (numAmount > getCurrentBalance()) {
-      return "Insufficient wallet balance";
-    }
-    if (getCurrentBalance() <= 0) {
-      return "No funds available in wallet";
-    }
+    if (numAmount > getCurrentBalance()) return "Insufficient wallet balance";
+    if (getCurrentBalance() <= 0) return "No funds available in wallet";
     return null;
   };
 
-  // Validate PIN
   const validatePin = () => {
     const pin = pinDigits.join("");
-    if (!pin.match(/^\d{4}$/)) {
-      return "Please enter a valid 4-digit PIN";
-    }
+    if (!pin.match(/^\d{4}$/)) return "Please enter a valid 4-digit PIN";
     return null;
   };
 
-  // Handle PIN input change
   const handlePinChange = (index: number, value: string) => {
-    if (!/^\d?$/.test(value)) return; // Allow only single digit or empty
+    if (!/^\d?$/.test(value)) return;
     const newPinDigits = [...pinDigits];
     newPinDigits[index] = value;
     setPinDigits(newPinDigits);
     setError("");
-
-    // Move focus to next input if a digit is entered
     if (value && index < 3 && pinInputRefs.current[index + 1]) {
       pinInputRefs.current[index + 1]!.focus();
     }
   };
 
-  // Handle PIN keypress (e.g., backspace, Enter)
   const handlePinKeyPress = (
     index: number,
     e: React.KeyboardEvent<HTMLInputElement>
@@ -157,29 +123,23 @@ const WalletModal: React.FC<WalletModalProps> = ({
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (pinDigits.every((digit) => digit !== "")) {
-        sendPaymentHandler();
-      }
+      if (pinDigits.every((digit) => digit !== "")) sendPaymentHandler();
     }
   };
 
-  // Handle amount submission
   const handleAmountSubmit = () => {
     if (!currentUserId || (!activeConversation && !activeGroupJid)) {
       setError("No recipient or user ID available");
       return;
     }
-
     const validationError = validateAmount();
     if (validationError) {
       setError(validationError);
       return;
     }
-
     setShowPinInput(true);
   };
 
-  // Handle amount keypress
   const handleAmountKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -187,15 +147,18 @@ const WalletModal: React.FC<WalletModalProps> = ({
     }
   };
 
-  // Send payment
   const sendPaymentHandler = async () => {
+    console.log("Starting sendPaymentHandler");
     const pinError = validatePin();
     if (pinError) {
+      console.log("PIN validation failed:", pinError);
       setError(pinError);
       return;
     }
 
+    console.log("Setting isProcessing to true");
     setIsProcessing(true);
+    console.log("Clearing error");
     setError("");
 
     try {
@@ -205,68 +168,57 @@ const WalletModal: React.FC<WalletModalProps> = ({
       const conversationId = activeConversation || activeGroupJid || "";
       const recipientId = conversationId.split("@")[0];
 
-      console.log("💸 Sending payment via wallet modal:", {
-        recipientId,
-        amount: numAmount,
-        currency: getCurrency(),
-        description: `Payment to ${getConversationDisplayName()}`,
-        reference: `CHAT_${clientMessageId}`,
-        pin,
-      });
-
+      console.log("Sending payment:", { recipientId, amount: numAmount });
       const success = await sendPayment({
         recipientId,
         amount: numAmount,
         currency: getCurrency(),
         description: `Payment to ${getConversationDisplayName()}`,
         reference: `CHAT_${clientMessageId}`,
-        pin,
+        // pin,
       });
 
       if (success) {
-        const paymentMessage = {
-          id: clientMessageId,
-          clientMessageId,
-          conversationId,
-          senderId: currentUserId,
-          senderName: "You",
-          content: `Sent ${formatCurrency(numAmount)}`,
-          type: "PAYMENT" as const,
-          sentAt: new Date(),
-          status: "sent" as const,
-          isPayment: true,
+        const numAmount = parseFloat(amount);
+        const currency = getCurrency();
+
+        // Create payment message
+        const paymentMessage: Message = {
+          id: `payment_${Date.now()}`,
+          from: `${currentUserId}@${process.env.NEXT_PUBLIC_XMPP_DOMAIN}`,
+          to: activeConversation || activeGroupJid || "",
+          text: `Sent ${currency} ${numAmount} to ${getConversationDisplayName()}`,
+          timestamp: new Date(),
+          isOwn: true,
+          type: "payment",
+          paymentAmount: numAmount.toString(),
         };
 
         addMessage(paymentMessage);
-
-        const paymentData = {
-          conversationId,
-          content: paymentMessage.content,
-          type: "PAYMENT",
-          clientMessageId,
-          paymentAmount: numAmount,
-        };
-
-        // chatSocketService.sendMessage(paymentData);
+        // console.log("Message added, closing modal");
         handleClose();
 
         setTimeout(() => {
+          console.log("Refreshing wallet");
           refreshWallet();
         }, 1000);
       } else {
+        console.log("Payment failed");
         setError("Payment failed. Please try again.");
       }
     } catch (error) {
-      console.error("Payment failed:", error);
+      console.error("Payment error:", error);
       setError(
-        error instanceof Error ? error.message : "Payment failed. Please try again."
+        error instanceof Error
+          ? error.message
+          : "Payment failed. Please try again."
       );
     } finally {
+      console.log("Setting isProcessing to false");
       setIsProcessing(false);
     }
   };
 
-  // Close modal
   const handleClose = () => {
     setShowWalletModal(false);
     setAmount("");
@@ -275,7 +227,6 @@ const WalletModal: React.FC<WalletModalProps> = ({
     setShowPinInput(false);
   };
 
-  // Calculate modal position
   const getModalStyle = () => {
     if (!buttonPosition) {
       return {
@@ -286,28 +237,17 @@ const WalletModal: React.FC<WalletModalProps> = ({
         zIndex: 50,
       };
     }
-
     const modalWidth = 320;
-    const modalHeight = showPinInput ? 360 : 300; // Increased height for PIN inputs
+    const modalHeight = showPinInput ? 360 : 300;
     const offset = 10;
-
     let top = buttonPosition.top - modalHeight - offset;
     let left = buttonPosition.left + buttonPosition.width / 2 - modalWidth / 2;
-
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-
-    if (left + modalWidth > viewportWidth - 10) {
+    if (left + modalWidth > viewportWidth - 10)
       left = viewportWidth - modalWidth - 10;
-    }
-    if (left < 10) {
-      left = 10;
-    }
-
-    if (top < 10) {
-      top = buttonPosition.top + offset;
-    }
-
+    if (left < 10) left = 10;
+    if (top < 10) top = buttonPosition.top + offset;
     return {
       position: "fixed" as const,
       top: `${top}px`,
@@ -318,18 +258,14 @@ const WalletModal: React.FC<WalletModalProps> = ({
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 bg-white/50 dark:bg-black/50 bg-opacity-30 z-40"
         onClick={handleClose}
       />
-
-      {/* Modal */}
       <div
         style={getModalStyle()}
         className="bg-[var(--background)] text-[var(--foreground)] not-first:rounded-3xl shadow-xl w-80 p-6"
       >
-        {/* Available Balance */}
         <div className="text-center mb-6">
           <p className="text-[var(--foreground)] text-sm mb-2">
             Available Balance
@@ -347,69 +283,56 @@ const WalletModal: React.FC<WalletModalProps> = ({
             </p>
           )}
         </div>
-
         <hr className="border-gray-200 mb-6" />
-
-        {/* Conditional Rendering: Amount or PIN Input */}
         {!showPinInput ? (
-          <>
-            {/* Send Amount */}
-            <div className="mb-4">
-              <label className="block text-[var(--foreground)] text-xs font-medium mb-3">
-                Send Amount
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => {
-                  setAmount(e.target.value);
-                  setError("");
-                }}
-                onKeyPress={handleAmountKeyPress}
-                placeholder="Enter amount"
-                className="w-full px-4 py-1 border border-gray-300 text-[var(--foreground)] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                min="0"
-                step="0.01"
-                disabled={isLoadingSummary || isProcessing || isSending}
-                autoFocus
-              />
-            </div>
-          </>
+          <div className="mb-4">
+            <label className="block text-[var(--foreground)] text-xs font-medium mb-3">
+              Send Amount
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setError("");
+              }}
+              onKeyPress={handleAmountKeyPress}
+              placeholder="Enter amount"
+              className="w-full px-4 py-1 border border-gray-300 text-[var(--foreground)] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              min="0"
+              step="0.01"
+              disabled={isLoadingSummary || isProcessing || isSending}
+              autoFocus
+            />
+          </div>
         ) : (
-          <>
-            {/* PIN Input */}
-            <div className="mb-4">
-              <label className="block text-[var(--foreground)] text-xs font-medium mb-3">
-                Enter 4-Digit PIN
-              </label>
-              <div className="flex space-x-2 justify-center">
-                {pinDigits.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => (pinInputRefs.current[index] = el)}
-                    type="password"
-                    value={digit}
-                    onChange={(e) => handlePinChange(index, e.target.value)}
-                    onKeyDown={(e) => handlePinKeyPress(index, e)}
-                    placeholder="•"
-                    className="w-12 h-12 text-center text-lg border border-gray-300 text-black dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    maxLength={1}
-                    disabled={isLoadingSummary || isProcessing || isSending}
-                  />
-                ))}
-              </div>
+          <div className="mb-4">
+            <label className="block text-[var(--foreground)] text-xs font-medium mb-3">
+              Enter 4-Digit PIN
+            </label>
+            <div className="flex space-x-2 justify-center">
+              {pinDigits.map((digit, index) => (
+                <input
+                  key={index}
+                  ref={(el) => (pinInputRefs.current[index] = el)}
+                  type="password"
+                  value={digit}
+                  onChange={(e) => handlePinChange(index, e.target.value)}
+                  onKeyDown={(e) => handlePinKeyPress(index, e)}
+                  placeholder="•"
+                  className="w-12 h-12 text-center text-lg border border-gray-300 text-[var(--foreground)] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  maxLength={1}
+                  disabled={isLoadingSummary || isProcessing || isSending}
+                />
+              ))}
             </div>
-          </>
+          </div>
         )}
-
-        {/* Error Message */}
         {error && (
           <div className="mb-4">
             <p className="text-red-500 text-sm text-center">{error}</p>
           </div>
         )}
-
-        {/* Continue Button */}
         <button
           onClick={showPinInput ? sendPaymentHandler : handleAmountSubmit}
           disabled={

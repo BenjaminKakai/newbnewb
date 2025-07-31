@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import toast from "react-hot-toast";
+import { useTheme } from "@/providers/ThemeProvider";
 
 const Spinner: React.FC = () => (
   <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -14,6 +15,7 @@ export const OTPVerificationPage: React.FC = () => {
   const [timeRemaining, setTimeRemaining] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const { isDarkMode } = useTheme();
 
   const router = useRouter();
   const { userId, user, isLoading, error, verifyOtp, resendOtp, clearError } =
@@ -106,7 +108,9 @@ export const OTPVerificationPage: React.FC = () => {
       router.push(nextStep || "/chat");
     } catch (err) {
       console.error("Failed to verify OTP:", err);
-      toast.error(err instanceof Error ? err.message : "OTP verification failed");
+      toast.error(
+        err instanceof Error ? err.message : "OTP verification failed"
+      );
     }
   };
 
@@ -151,14 +155,21 @@ export const OTPVerificationPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen p-4 bg-white dark:bg-black flex">
-      <div className="hidden rounded-lg lg:flex lg:w-1/2 relative overflow-hidden bg-[#2A8FEA] dark:bg-black">
-        <div className="absolute inset-0" style={{ backgroundImage: `url("/pattern.svg")` }}></div>
+    <div className="min-h-screen p-4 bg-[var(--background)]/50 text-[var(--foreground)] flex">
+      <div
+        className={`hidden rounded-lg lg:flex lg:w-1/2 relative overflow-hidden p-4 ${
+          isDarkMode ? "bg-[var(--background)]" : "bg-[#2A8FEA]"
+        }`}
+      >
+        <div
+          className="absolute inset-0"
+          style={{ backgroundImage: `url("/pattern.svg")` }}
+        ></div>
         <div className="relative z-10 flex flex-col justify-between w-full p-12">
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <div className="flex items-center justify-center mb-4">
-                <img src="/logo-bg.svg" className="" />
+              <img src="/favicon-3.svg" className="w-32" />
               </div>
             </div>
           </div>
@@ -196,10 +207,10 @@ export const OTPVerificationPage: React.FC = () => {
                 className="w-32 h-auto"
               />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            <h2 className="text-2xl font-bold text-[var(--foreground)] mb-2">
               Verify your phone
             </h2>
-            <p className="text-gray-600 dark:text-white text-sm">
+            <p className="text-[var(--foreground)] text-sm">
               Enter the 6-digit code sent to your phone number
             </p>
           </div>
@@ -217,7 +228,7 @@ export const OTPVerificationPage: React.FC = () => {
                   value={digit}
                   onChange={(e) => handleOtpChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
-                  className="w-12 h-12 text-center text-black dark:text-white text-xl font-bold border-2 border-gray-300 rounded-lg focus:border-[#2A8FEA] focus:outline-none transition-colors"
+                  className="w-12 h-12 text-center text-[var(--foreground)] text-xl font-bold border-2 border-gray-300 rounded-lg focus:border-[#2A8FEA] focus:outline-none transition-colors"
                   disabled={isLoading}
                 />
               ))}
@@ -232,10 +243,10 @@ export const OTPVerificationPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || otp.join("").length !== 6}
-              className={`w-full py-3 px-6 rounded-full font-bold transition-all duration-200 flex items-center justify-center space-x-2 ${
+              className={`w-full py-3 px-6 rounded-full font-bold cursor-pointer transition-all duration-200 flex items-center justify-center space-x-2 ${
                 isLoading || otp.join("").length !== 6
                   ? "bg-gray-400 text-gray-600 cursor-not-allowed"
-                  : "bg-[#2A8FEA] text-white hover:bg-blue-600 hover:shadow-lg transform hover:scale-105"
+                  : "bg-[#2A8FEA] text-white hover:bg-[#2A8FEA] hover:shadow-lg transform hover:scale-105"
               }`}
             >
               {isLoading ? (
@@ -244,7 +255,7 @@ export const OTPVerificationPage: React.FC = () => {
                   <span>Verifying...</span>
                 </>
               ) : (
-                <span>Verify & Continue</span>
+                <span>Verify Code</span>
               )}
             </button>
           </form>

@@ -9,29 +9,30 @@ export const Footer: React.FC = () => {
 
   return (
     <>
-      <section className="py-16 px-6 bg-[#F4F5F7]">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
-          {/* Left Column */}
-          <div className="md:col-span-2 lg:col-span-1">
+      <section className="py-16 px-6 bg-[var(--background)]">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+          {/* Logo and Email Signup - Takes 2 columns on large screens */}
+          <div className="md:col-span-2 lg:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
-              <img 
-                src="/dark-logo-full.svg" 
-                alt="Blue chat bubble icon logo" 
-                className="w-40" 
+              <img
+                src={
+                  isDarkMode ? "/dark-logo-white.svg" : "/dark-logo-full.svg"
+                }
+                alt="Blue chat bubble icon logo"
+                className="w-40"
               />
-
             </div>
             <p className="text-lg font-medium mb-2">Chat. Connect. Transact.</p>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-[var(--foreground)] mb-4">
               Stay updated on new features and community events.
             </p>
-            <div className="flex items-center max-w-md">
-              <input 
-                type="email" 
-                placeholder="Enter your email" 
-                className="flex-grow px-4 py-2 w-80 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+            <div className="flex items-center">
+              <input
+                type="email"
+                placeholder="Enter your email"
+                className="flex-grow px-4 py-2 text-[var(--foreground)] border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-xs"
               />
-              <button className="ml-2 px-6 py-2 bg-blue-500 text-white text-sm font-medium rounded-full hover:bg-blue-600">
+              <button className="ml-2 px-6 py-2 bg-[#2A8FEA] text-white text-sm font-medium rounded-full hover:bg-[#2A8FEA]">
                 Submit
               </button>
             </div>
@@ -40,7 +41,7 @@ export const Footer: React.FC = () => {
           {/* Features Column */}
           <div>
             <h3 className="text-sm font-semibold mb-3">Features</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
+            <ul className="space-y-2 text-sm text-[var(--foreground)]">
               <li>Message Privately</li>
               <li>Connect in groups</li>
               <li>Safe Wallet</li>
@@ -51,7 +52,7 @@ export const Footer: React.FC = () => {
           {/* Legal Column */}
           <div>
             <h3 className="text-sm font-semibold mb-3">Legal</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
+            <ul className="space-y-2 text-sm text-[var(--foreground)]">
               <li>Privacy policy</li>
               <li>Terms & Condition</li>
               <li>Transparency Report</li>
@@ -62,7 +63,7 @@ export const Footer: React.FC = () => {
           {/* Social Column */}
           <div>
             <h3 className="text-sm font-semibold mb-3">Social</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
+            <ul className="space-y-2 text-sm text-[var(--foreground)]">
               <li>Twitter</li>
               <li>Facebook</li>
               <li>Linkedin</li>

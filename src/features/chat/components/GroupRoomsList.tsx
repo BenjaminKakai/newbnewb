@@ -142,8 +142,8 @@ export const GroupRoomList: React.FC<GroupRoomListProps> = ({
             <div
               key={group.jid}
               onClick={() => group.jid && onSelectGroup(group.jid)}
-              className={`flex items-center p-4 cursor-pointer hover:bg-gray-200  ${
-                activeGroup === group.jid ? "bg-gray-50 " : ""
+              className={`flex items-center p-4 cursor-pointer hover:bg-gray-100 rounded-lg  ${
+                activeGroup === group.jid ? "bg-gray-100 rounded-lg text-gray-800" : ""
               }`}
             >
               <div
@@ -161,7 +161,7 @@ export const GroupRoomList: React.FC<GroupRoomListProps> = ({
               </div>
               <div className="ml-3 flex-1">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-md font-semibold text-gray-900">
+                  <h3 className="text-md text-gray-500 dark:text-gray-400">
                     {getDisplayName(group.jid)}
                   </h3>
                   <span className="text-xs text-gray-500 dark:text-gray-400">
