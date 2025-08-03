@@ -216,22 +216,9 @@ const CallPage: React.FC = () => {
         iceCandidatePoolSize: 10
       });
 
-      // ✅ **FIXED** - Better transceiver management to prevent duplicates
+      // No manual addTransceiver calls; addTrack will create transceivers as needed
       const existingTransceivers = pc.getTransceivers();
       console.log('[CALL PAGE] 🔧 Existing transceivers:', existingTransceivers.length);
-      
-      if (existingTransceivers.length === 0) {
-        console.log('[CALL PAGE] 🔧 Adding transceivers for bidirectional media');
-        const audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
-        const videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
-        console.log('[CALL PAGE] ✅ Added audio transceiver:', audioTransceiver.mid);
-        console.log('[CALL PAGE] ✅ Added video transceiver:', videoTransceiver.mid);
-      } else {
-        console.log('[CALL PAGE] ⚠️ Transceivers already exist, count:', existingTransceivers.length);
-        existingTransceivers.forEach((t, i) => {
-          console.log(`[CALL PAGE] 📡 Transceiver ${i}:`, t.receiver?.track?.kind, 'direction:', t.direction);
-        });
-      }
 
       // Handle ICE candidates
       pc.onicecandidate = (event) => {
