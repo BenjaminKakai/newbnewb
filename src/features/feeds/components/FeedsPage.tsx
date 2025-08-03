@@ -119,7 +119,7 @@ const FeedsPage: React.FC = () => {
     try {
       const socket = io(SOCKET_URL, {
         auth: { token: accessToken },
-        transports: ['websocket'],
+        transports: ['polling'],
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000
