@@ -635,7 +635,9 @@ const CallPage: React.FC = () => {
     }
   }, [socket, user, targetUserId, isConnected, accessToken, initializeLocalMedia, initializePeerConnection]);
 
-  // ✅ **FIXED** - Handle outgoing audio calls with explicit track addition
+  
+    // ✅ **FIXED** - Handle outgoing audio calls with explicit track addition
+// ✅ **FIXED** - Handle outgoing audio calls with explicit track addition
   const handleStartAudioCall = useCallback(async () => {
     if (!user?.id || !isConnected || !targetUserId.trim()) {
       alert('❌ Missing requirements for call');
