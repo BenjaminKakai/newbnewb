@@ -548,6 +548,7 @@ const CallPage: React.FC = () => {
     };
   }, [socket, isConnected, user?.id, initializeLocalMedia, initializePeerConnection, localStreamState, cleanup]);
 
+  // ✅ **FIXED** - Handle outgoing video calls with explicit track addition
   const handleStartVideoCall = useCallback(async () => {
     if (!user?.id || !isConnected || !targetUserId.trim()) {
       alert('❌ Missing requirements for call');
@@ -557,11 +558,27 @@ const CallPage: React.FC = () => {
     try {
       console.log(`[CALL PAGE] 📞 Starting video call to ${targetUserId}`);
       
-      await initializeLocalMedia(true);
+      // ✅ FIXED: Get local media and use returned stream directly
+      const localStream = await initializeLocalMedia(true);
       const pc = await initializePeerConnection();
       
-      const offer = await pc.createOffer();
+      // ✅ CRITICAL: Explicitly add local tracks to peer connection
+      console.log('[CALL PAGE] 🔧 Adding local tracks to outgoing call peer connection');
+      localStream.getTracks().forEach(track => {
+        console.log('[CALL PAGE] ➕ Adding local track to peer connection:', track.kind, track.id.slice(0,8));
+        pc.addTrack(track, localStream);
+      });
+      
+      // ✅ Create offer AFTER adding local tracks
+      console.log('[CALL PAGE] 🔧 Creating offer with local tracks attached');
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+        voiceActivityDetection: false
+      });
       await pc.setLocalDescription(offer);
+      
+      console.log('[CALL PAGE] 🔍 Offer SDP preview:', offer.sdp?.substring(0, 200));
       
       const response = await fetch(`https://calls-dev.wasaachat.com/v1/calls`, {
         method: 'POST',
@@ -586,6 +603,7 @@ const CallPage: React.FC = () => {
       currentCallIdRef.current = callId;
       currentTargetIdRef.current = targetUserId.trim();
 
+      console.log('[CALL PAGE] 🚀 Sending call-offer with local tracks included');
       socket.emit('call-offer', {
         callId,
         targetId: targetUserId.trim(),
@@ -617,6 +635,7 @@ const CallPage: React.FC = () => {
     }
   }, [socket, user, targetUserId, isConnected, accessToken, initializeLocalMedia, initializePeerConnection]);
 
+  // ✅ **FIXED** - Handle outgoing audio calls with explicit track addition
   const handleStartAudioCall = useCallback(async () => {
     if (!user?.id || !isConnected || !targetUserId.trim()) {
       alert('❌ Missing requirements for call');
@@ -626,11 +645,27 @@ const CallPage: React.FC = () => {
     try {
       console.log(`[CALL PAGE] 📞 Starting audio call to ${targetUserId}`);
       
-      await initializeLocalMedia(false);
+      // ✅ FIXED: Get local media and use returned stream directly
+      const localStream = await initializeLocalMedia(false);
       const pc = await initializePeerConnection();
       
-      const offer = await pc.createOffer();
+      // ✅ CRITICAL: Explicitly add local tracks to peer connection
+      console.log('[CALL PAGE] 🔧 Adding local tracks to outgoing call peer connection');
+      localStream.getTracks().forEach(track => {
+        console.log('[CALL PAGE] ➕ Adding local track to peer connection:', track.kind, track.id.slice(0,8));
+        pc.addTrack(track, localStream);
+      });
+      
+      // ✅ Create offer AFTER adding local tracks
+      console.log('[CALL PAGE] 🔧 Creating offer with local tracks attached');
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false,
+        voiceActivityDetection: false
+      });
       await pc.setLocalDescription(offer);
+      
+      console.log('[CALL PAGE] 🔍 Offer SDP preview:', offer.sdp?.substring(0, 200));
       
       const response = await fetch(`https://calls-dev.wasaachat.com/v1/calls`, {
         method: 'POST',
@@ -655,6 +690,7 @@ const CallPage: React.FC = () => {
       currentCallIdRef.current = callId;
       currentTargetIdRef.current = targetUserId.trim();
 
+      console.log('[CALL PAGE] 🚀 Sending call-offer with local tracks included');
       socket.emit('call-offer', {
         callId,
         targetId: targetUserId.trim(),
