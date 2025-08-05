@@ -664,7 +664,7 @@ const CallPage: React.FC = () => {
         },
         body: JSON.stringify({
           targetUserId: targetUserId.trim(),
-          callType: 'voice',
+          callType: 'audio',
           settings: { video: false, audio: true }
         })
       });
@@ -685,7 +685,7 @@ const CallPage: React.FC = () => {
         targetId: targetUserId.trim(),
         offer,
         callerId: user.id,
-        callType: 'voice'
+        callType: 'audio'
       });
 
       setIsOutgoingCall(true);
@@ -693,7 +693,7 @@ const CallPage: React.FC = () => {
         callId,
         callerId: user.id,
         callerName: 'You (Outgoing)',
-        callType: 'voice',
+        callType: 'audio',
         offer: null,
         socket
       });
